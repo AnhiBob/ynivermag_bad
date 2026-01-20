@@ -70,6 +70,9 @@ namespace ynivermag_bad
                                         this.Hide();
                                         break;
                                     }
+                                default:
+                                    Console.WriteLine($"Такой роли нет в БД");
+                                    break;
 
                             }
                         }

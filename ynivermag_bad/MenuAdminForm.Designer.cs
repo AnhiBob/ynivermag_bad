@@ -31,9 +31,12 @@
             System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(MenuAdminForm));
             this.label1 = new System.Windows.Forms.Label();
             this.Lists = new System.Windows.Forms.Button();
-            this.panel1 = new System.Windows.Forms.Panel();
-            this.label2 = new System.Windows.Forms.Label();
+            this.FIOlb = new System.Windows.Forms.Label();
             this.Exit = new System.Windows.Forms.Button();
+            this.groupBox1 = new System.Windows.Forms.GroupBox();
+            this.pictureBox1 = new System.Windows.Forms.PictureBox();
+            this.groupBox1.SuspendLayout();
+            ((System.ComponentModel.ISupportInitialize)(this.pictureBox1)).BeginInit();
             this.SuspendLayout();
             // 
             // label1
@@ -50,7 +53,7 @@
             // 
             this.Lists.BackColor = System.Drawing.Color.GreenYellow;
             this.Lists.FlatStyle = System.Windows.Forms.FlatStyle.Popup;
-            this.Lists.Location = new System.Drawing.Point(883, 123);
+            this.Lists.Location = new System.Drawing.Point(883, 88);
             this.Lists.Name = "Lists";
             this.Lists.Size = new System.Drawing.Size(229, 72);
             this.Lists.TabIndex = 1;
@@ -58,29 +61,20 @@
             this.Lists.UseVisualStyleBackColor = false;
             this.Lists.Click += new System.EventHandler(this.Lists_Click);
             // 
-            // panel1
+            // FIOlb
             // 
-            this.panel1.BackgroundImage = global::ynivermag_bad.Properties.Resources.лого;
-            this.panel1.BackgroundImageLayout = System.Windows.Forms.ImageLayout.Stretch;
-            this.panel1.Location = new System.Drawing.Point(12, 123);
-            this.panel1.Name = "panel1";
-            this.panel1.Size = new System.Drawing.Size(851, 467);
-            this.panel1.TabIndex = 2;
-            // 
-            // label2
-            // 
-            this.label2.AutoSize = true;
-            this.label2.Location = new System.Drawing.Point(12, 9);
-            this.label2.Name = "label2";
-            this.label2.Size = new System.Drawing.Size(54, 24);
-            this.label2.TabIndex = 3;
-            this.label2.Text = "Роль";
+            this.FIOlb.AutoSize = true;
+            this.FIOlb.Location = new System.Drawing.Point(10, 33);
+            this.FIOlb.Name = "FIOlb";
+            this.FIOlb.Size = new System.Drawing.Size(50, 20);
+            this.FIOlb.TabIndex = 3;
+            this.FIOlb.Text = "Роль";
             // 
             // Exit
             // 
             this.Exit.BackColor = System.Drawing.Color.LimeGreen;
             this.Exit.FlatStyle = System.Windows.Forms.FlatStyle.Popup;
-            this.Exit.Location = new System.Drawing.Point(883, 515);
+            this.Exit.Location = new System.Drawing.Point(883, 480);
             this.Exit.Name = "Exit";
             this.Exit.Size = new System.Drawing.Size(229, 75);
             this.Exit.TabIndex = 4;
@@ -88,25 +82,49 @@
             this.Exit.UseVisualStyleBackColor = false;
             this.Exit.Click += new System.EventHandler(this.Exit_Click);
             // 
+            // groupBox1
+            // 
+            this.groupBox1.Controls.Add(this.FIOlb);
+            this.groupBox1.Font = new System.Drawing.Font("Microsoft Sans Serif", 12.25F);
+            this.groupBox1.Location = new System.Drawing.Point(12, 9);
+            this.groupBox1.Name = "groupBox1";
+            this.groupBox1.Size = new System.Drawing.Size(161, 73);
+            this.groupBox1.TabIndex = 5;
+            this.groupBox1.TabStop = false;
+            this.groupBox1.Text = "Администратор";
+            // 
+            // pictureBox1
+            // 
+            this.pictureBox1.BackgroundImage = global::ynivermag_bad.Properties.Resources.лого;
+            this.pictureBox1.BackgroundImageLayout = System.Windows.Forms.ImageLayout.Zoom;
+            this.pictureBox1.Location = new System.Drawing.Point(12, 88);
+            this.pictureBox1.Name = "pictureBox1";
+            this.pictureBox1.Size = new System.Drawing.Size(851, 467);
+            this.pictureBox1.TabIndex = 6;
+            this.pictureBox1.TabStop = false;
+            // 
             // MenuAdminForm
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(11F, 24F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.BackColor = System.Drawing.Color.White;
-            this.ClientSize = new System.Drawing.Size(1124, 602);
+            this.ClientSize = new System.Drawing.Size(1124, 565);
+            this.Controls.Add(this.pictureBox1);
             this.Controls.Add(this.Exit);
-            this.Controls.Add(this.label2);
-            this.Controls.Add(this.panel1);
             this.Controls.Add(this.Lists);
             this.Controls.Add(this.label1);
+            this.Controls.Add(this.groupBox1);
             this.Font = new System.Drawing.Font("Microsoft Sans Serif", 14.25F);
             this.Icon = ((System.Drawing.Icon)(resources.GetObject("$this.Icon")));
-            this.Margin = new System.Windows.Forms.Padding(6, 6, 6, 6);
+            this.Margin = new System.Windows.Forms.Padding(6);
             this.MaximizeBox = false;
             this.MinimizeBox = false;
             this.Name = "MenuAdminForm";
             this.StartPosition = System.Windows.Forms.FormStartPosition.CenterScreen;
             this.Text = "Меню администратора";
+            this.groupBox1.ResumeLayout(false);
+            this.groupBox1.PerformLayout();
+            ((System.ComponentModel.ISupportInitialize)(this.pictureBox1)).EndInit();
             this.ResumeLayout(false);
             this.PerformLayout();
 
@@ -116,8 +134,9 @@
 
         private System.Windows.Forms.Label label1;
         private System.Windows.Forms.Button Lists;
-        private System.Windows.Forms.Panel panel1;
-        private System.Windows.Forms.Label label2;
+        private System.Windows.Forms.Label FIOlb;
         private System.Windows.Forms.Button Exit;
+        private System.Windows.Forms.GroupBox groupBox1;
+        private System.Windows.Forms.PictureBox pictureBox1;
     }
 }

@@ -29,46 +29,49 @@ namespace ynivermag_bad
         /// </summary>
         private void InitializeComponent()
         {
-            this.button1 = new System.Windows.Forms.Button();
-            this.button2 = new System.Windows.Forms.Button();
+            System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(AddProductForm));
+            this.Back = new System.Windows.Forms.Button();
+            this.AddProduct = new System.Windows.Forms.Button();
             this.label1 = new System.Windows.Forms.Label();
             this.label2 = new System.Windows.Forms.Label();
             this.label3 = new System.Windows.Forms.Label();
             this.label4 = new System.Windows.Forms.Label();
             this.label5 = new System.Windows.Forms.Label();
-            this.textBox1 = new System.Windows.Forms.TextBox();
-            this.textBox2 = new System.Windows.Forms.TextBox();
-            this.textBox3 = new System.Windows.Forms.TextBox();
-            this.comboBox1 = new System.Windows.Forms.ComboBox();
+            this.Name = new System.Windows.Forms.TextBox();
+            this.Price = new System.Windows.Forms.TextBox();
+            this.Count = new System.Windows.Forms.TextBox();
+            this.CategoryCb = new System.Windows.Forms.ComboBox();
             this.SuspendLayout();
             // 
-            // button1
+            // Back
             // 
-            this.button1.BackColor = System.Drawing.Color.LimeGreen;
-            this.button1.FlatStyle = System.Windows.Forms.FlatStyle.Popup;
-            this.button1.Location = new System.Drawing.Point(28, 237);
-            this.button1.Name = "button1";
-            this.button1.Size = new System.Drawing.Size(159, 40);
-            this.button1.TabIndex = 0;
-            this.button1.Text = "Отмена";
-            this.button1.UseVisualStyleBackColor = false;
+            this.Back.BackColor = System.Drawing.Color.LimeGreen;
+            this.Back.FlatStyle = System.Windows.Forms.FlatStyle.Popup;
+            this.Back.Location = new System.Drawing.Point(28, 249);
+            this.Back.Name = "Back";
+            this.Back.Size = new System.Drawing.Size(159, 40);
+            this.Back.TabIndex = 0;
+            this.Back.Text = "Отмена";
+            this.Back.UseVisualStyleBackColor = false;
+            this.Back.Click += new System.EventHandler(this.Back_Click);
             // 
-            // button2
+            // AddProduct
             // 
-            this.button2.BackColor = System.Drawing.Color.GreenYellow;
-            this.button2.FlatStyle = System.Windows.Forms.FlatStyle.Popup;
-            this.button2.Location = new System.Drawing.Point(213, 239);
-            this.button2.Name = "button2";
-            this.button2.Size = new System.Drawing.Size(159, 38);
-            this.button2.TabIndex = 1;
-            this.button2.Text = "Добавить";
-            this.button2.UseVisualStyleBackColor = false;
+            this.AddProduct.BackColor = System.Drawing.Color.GreenYellow;
+            this.AddProduct.FlatStyle = System.Windows.Forms.FlatStyle.Popup;
+            this.AddProduct.Location = new System.Drawing.Point(332, 249);
+            this.AddProduct.Name = "AddProduct";
+            this.AddProduct.Size = new System.Drawing.Size(159, 40);
+            this.AddProduct.TabIndex = 1;
+            this.AddProduct.Text = "Добавить";
+            this.AddProduct.UseVisualStyleBackColor = false;
+            this.AddProduct.Click += new System.EventHandler(this.AddProduct_Click);
             // 
             // label1
             // 
             this.label1.AutoSize = true;
             this.label1.Font = new System.Drawing.Font("Microsoft Sans Serif", 20.25F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(204)));
-            this.label1.Location = new System.Drawing.Point(77, 9);
+            this.label1.Location = new System.Drawing.Point(120, 3);
             this.label1.Name = "label1";
             this.label1.Size = new System.Drawing.Size(267, 31);
             this.label1.TabIndex = 2;
@@ -110,57 +113,60 @@ namespace ynivermag_bad
             this.label5.TabIndex = 6;
             this.label5.Text = "Категория";
             // 
-            // textBox1
+            // Name
             // 
-            this.textBox1.Location = new System.Drawing.Point(166, 77);
-            this.textBox1.Name = "textBox1";
-            this.textBox1.Size = new System.Drawing.Size(206, 29);
-            this.textBox1.TabIndex = 7;
+            this.Name.Font = new System.Drawing.Font("Microsoft Sans Serif", 15.25F);
+            this.Name.Location = new System.Drawing.Point(166, 77);
+            this.Name.Name = "Name";
+            this.Name.Size = new System.Drawing.Size(326, 31);
+            this.Name.TabIndex = 7;
             // 
-            // textBox2
+            // Price
             // 
-            this.textBox2.Location = new System.Drawing.Point(166, 112);
-            this.textBox2.Name = "textBox2";
-            this.textBox2.Size = new System.Drawing.Size(206, 29);
-            this.textBox2.TabIndex = 8;
+            this.Price.Font = new System.Drawing.Font("Microsoft Sans Serif", 15.25F);
+            this.Price.Location = new System.Drawing.Point(166, 112);
+            this.Price.Name = "Price";
+            this.Price.Size = new System.Drawing.Size(326, 31);
+            this.Price.TabIndex = 8;
             // 
-            // textBox3
+            // Count
             // 
-            this.textBox3.Location = new System.Drawing.Point(166, 148);
-            this.textBox3.Name = "textBox3";
-            this.textBox3.Size = new System.Drawing.Size(206, 29);
-            this.textBox3.TabIndex = 9;
+            this.Count.Font = new System.Drawing.Font("Microsoft Sans Serif", 15.25F);
+            this.Count.Location = new System.Drawing.Point(166, 148);
+            this.Count.Name = "Count";
+            this.Count.Size = new System.Drawing.Size(326, 31);
+            this.Count.TabIndex = 9;
             // 
-            // comboBox1
+            // CategoryCb
             // 
-            this.comboBox1.FormattingEnabled = true;
-            this.comboBox1.Location = new System.Drawing.Point(168, 187);
-            this.comboBox1.Name = "comboBox1";
-            this.comboBox1.Size = new System.Drawing.Size(203, 32);
-            this.comboBox1.TabIndex = 10;
+            this.CategoryCb.FormattingEnabled = true;
+            this.CategoryCb.Location = new System.Drawing.Point(166, 187);
+            this.CategoryCb.Name = "CategoryCb";
+            this.CategoryCb.Size = new System.Drawing.Size(325, 32);
+            this.CategoryCb.TabIndex = 10;
             // 
             // AddProductForm
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(11F, 24F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.BackColor = System.Drawing.Color.White;
-            this.ClientSize = new System.Drawing.Size(414, 304);
-            this.Controls.Add(this.comboBox1);
-            this.Controls.Add(this.textBox3);
-            this.Controls.Add(this.textBox2);
-            this.Controls.Add(this.textBox1);
+            this.ClientSize = new System.Drawing.Size(514, 321);
+            this.Controls.Add(this.CategoryCb);
+            this.Controls.Add(this.Count);
+            this.Controls.Add(this.Price);
+            this.Controls.Add(this.Name);
             this.Controls.Add(this.label5);
             this.Controls.Add(this.label4);
             this.Controls.Add(this.label3);
             this.Controls.Add(this.label2);
             this.Controls.Add(this.label1);
-            this.Controls.Add(this.button2);
-            this.Controls.Add(this.button1);
+            this.Controls.Add(this.AddProduct);
+            this.Controls.Add(this.Back);
             this.Font = new System.Drawing.Font("Microsoft Sans Serif", 14.25F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(204)));
-            this.Margin = new System.Windows.Forms.Padding(6, 6, 6, 6);
-            this.Name = "AddProductForm";
-            this.Text = "AddProductForm";
-            this.Load += new System.EventHandler(this.AddProductForm_Load);
+            this.Icon = ((System.Drawing.Icon)(resources.GetObject("$this.Icon")));
+            this.Margin = new System.Windows.Forms.Padding(6);
+            this.StartPosition = System.Windows.Forms.FormStartPosition.CenterScreen;
+            this.Text = "Добавление Товара";
             this.ResumeLayout(false);
             this.PerformLayout();
 
@@ -168,16 +174,16 @@ namespace ynivermag_bad
 
         #endregion
 
-        private System.Windows.Forms.Button button1;
-        private System.Windows.Forms.Button button2;
+        private System.Windows.Forms.Button Back;
+        private System.Windows.Forms.Button AddProduct;
         private System.Windows.Forms.Label label1;
         private System.Windows.Forms.Label label2;
         private System.Windows.Forms.Label label3;
         private System.Windows.Forms.Label label4;
         private System.Windows.Forms.Label label5;
-        private System.Windows.Forms.TextBox textBox1;
-        private System.Windows.Forms.TextBox textBox2;
-        private System.Windows.Forms.TextBox textBox3;
-        private System.Windows.Forms.ComboBox comboBox1;
+        private System.Windows.Forms.TextBox Name;
+        private System.Windows.Forms.TextBox Price;
+        private System.Windows.Forms.TextBox Count;
+        private System.Windows.Forms.ComboBox CategoryCb;
     }
 }

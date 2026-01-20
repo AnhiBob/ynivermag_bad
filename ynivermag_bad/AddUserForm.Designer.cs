@@ -29,6 +29,7 @@ namespace ynivermag_bad
         /// </summary>
         private void InitializeComponent()
         {
+            System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(AddUserForm));
             this.label1 = new System.Windows.Forms.Label();
             this.label2 = new System.Windows.Forms.Label();
             this.label3 = new System.Windows.Forms.Label();
@@ -36,24 +37,25 @@ namespace ynivermag_bad
             this.label5 = new System.Windows.Forms.Label();
             this.label6 = new System.Windows.Forms.Label();
             this.label7 = new System.Windows.Forms.Label();
-            this.button1 = new System.Windows.Forms.Button();
-            this.button2 = new System.Windows.Forms.Button();
-            this.textBox1 = new System.Windows.Forms.TextBox();
-            this.textBox2 = new System.Windows.Forms.TextBox();
-            this.textBox3 = new System.Windows.Forms.TextBox();
-            this.textBox4 = new System.Windows.Forms.TextBox();
-            this.textBox6 = new System.Windows.Forms.TextBox();
-            this.comboBox1 = new System.Windows.Forms.ComboBox();
+            this.Back = new System.Windows.Forms.Button();
+            this.AddUser = new System.Windows.Forms.Button();
+            this.FirstName = new System.Windows.Forms.TextBox();
+            this.Login = new System.Windows.Forms.TextBox();
+            this.Password = new System.Windows.Forms.TextBox();
+            this.Email = new System.Windows.Forms.TextBox();
+            this.LastName = new System.Windows.Forms.TextBox();
+            this.RoleCb = new System.Windows.Forms.ComboBox();
             this.SuspendLayout();
             // 
             // label1
             // 
             this.label1.AutoSize = true;
-            this.label1.Location = new System.Drawing.Point(89, 9);
+            this.label1.Font = new System.Drawing.Font("Microsoft Sans Serif", 18.25F);
+            this.label1.Location = new System.Drawing.Point(74, 3);
             this.label1.Name = "label1";
-            this.label1.Size = new System.Drawing.Size(264, 24);
+            this.label1.Size = new System.Drawing.Size(326, 29);
             this.label1.TabIndex = 0;
-            this.label1.Text = "Добавление пользователей";
+            this.label1.Text = "Добавление пользователя";
             // 
             // label2
             // 
@@ -109,85 +111,92 @@ namespace ynivermag_bad
             this.label7.TabIndex = 6;
             this.label7.Text = "Роль";
             // 
-            // button1
+            // Back
             // 
-            this.button1.BackColor = System.Drawing.Color.LimeGreen;
-            this.button1.FlatStyle = System.Windows.Forms.FlatStyle.Popup;
-            this.button1.Location = new System.Drawing.Point(29, 295);
-            this.button1.Name = "button1";
-            this.button1.Size = new System.Drawing.Size(132, 33);
-            this.button1.TabIndex = 7;
-            this.button1.Text = "Отмена";
-            this.button1.UseVisualStyleBackColor = false;
+            this.Back.BackColor = System.Drawing.Color.LimeGreen;
+            this.Back.FlatStyle = System.Windows.Forms.FlatStyle.Popup;
+            this.Back.Location = new System.Drawing.Point(31, 308);
+            this.Back.Name = "Back";
+            this.Back.Size = new System.Drawing.Size(160, 45);
+            this.Back.TabIndex = 7;
+            this.Back.Text = "Отмена";
+            this.Back.UseVisualStyleBackColor = false;
+            this.Back.Click += new System.EventHandler(this.Back_Click);
             // 
-            // button2
+            // AddUser
             // 
-            this.button2.BackColor = System.Drawing.Color.GreenYellow;
-            this.button2.FlatStyle = System.Windows.Forms.FlatStyle.Popup;
-            this.button2.Location = new System.Drawing.Point(221, 295);
-            this.button2.Name = "button2";
-            this.button2.Size = new System.Drawing.Size(132, 33);
-            this.button2.TabIndex = 8;
-            this.button2.Text = "Добавление";
-            this.button2.UseVisualStyleBackColor = false;
+            this.AddUser.BackColor = System.Drawing.Color.GreenYellow;
+            this.AddUser.FlatStyle = System.Windows.Forms.FlatStyle.Popup;
+            this.AddUser.Location = new System.Drawing.Point(265, 308);
+            this.AddUser.Name = "AddUser";
+            this.AddUser.Size = new System.Drawing.Size(170, 45);
+            this.AddUser.TabIndex = 8;
+            this.AddUser.Text = "Добавление";
+            this.AddUser.UseVisualStyleBackColor = false;
+            this.AddUser.Click += new System.EventHandler(this.AddUser_Click);
             // 
-            // textBox1
+            // FirstName
             // 
-            this.textBox1.Location = new System.Drawing.Point(124, 61);
-            this.textBox1.Name = "textBox1";
-            this.textBox1.Size = new System.Drawing.Size(185, 29);
-            this.textBox1.TabIndex = 9;
+            this.FirstName.Font = new System.Drawing.Font("Microsoft Sans Serif", 15.25F);
+            this.FirstName.Location = new System.Drawing.Point(124, 61);
+            this.FirstName.Name = "FirstName";
+            this.FirstName.Size = new System.Drawing.Size(312, 31);
+            this.FirstName.TabIndex = 9;
             // 
-            // textBox2
+            // Login
             // 
-            this.textBox2.Location = new System.Drawing.Point(124, 131);
-            this.textBox2.Name = "textBox2";
-            this.textBox2.Size = new System.Drawing.Size(185, 29);
-            this.textBox2.TabIndex = 10;
+            this.Login.Font = new System.Drawing.Font("Microsoft Sans Serif", 15.25F);
+            this.Login.Location = new System.Drawing.Point(124, 131);
+            this.Login.Name = "Login";
+            this.Login.Size = new System.Drawing.Size(312, 31);
+            this.Login.TabIndex = 10;
             // 
-            // textBox3
+            // Password
             // 
-            this.textBox3.Location = new System.Drawing.Point(124, 168);
-            this.textBox3.Name = "textBox3";
-            this.textBox3.Size = new System.Drawing.Size(185, 29);
-            this.textBox3.TabIndex = 11;
+            this.Password.Font = new System.Drawing.Font("Microsoft Sans Serif", 15.25F);
+            this.Password.Location = new System.Drawing.Point(124, 168);
+            this.Password.Name = "Password";
+            this.Password.Size = new System.Drawing.Size(312, 31);
+            this.Password.TabIndex = 11;
             // 
-            // textBox4
+            // Email
             // 
-            this.textBox4.Location = new System.Drawing.Point(124, 209);
-            this.textBox4.Name = "textBox4";
-            this.textBox4.Size = new System.Drawing.Size(185, 29);
-            this.textBox4.TabIndex = 12;
+            this.Email.Font = new System.Drawing.Font("Microsoft Sans Serif", 15.25F);
+            this.Email.Location = new System.Drawing.Point(124, 209);
+            this.Email.Name = "Email";
+            this.Email.Size = new System.Drawing.Size(312, 31);
+            this.Email.TabIndex = 12;
             // 
-            // textBox6
+            // LastName
             // 
-            this.textBox6.Location = new System.Drawing.Point(124, 96);
-            this.textBox6.Name = "textBox6";
-            this.textBox6.Size = new System.Drawing.Size(185, 29);
-            this.textBox6.TabIndex = 14;
+            this.LastName.Font = new System.Drawing.Font("Microsoft Sans Serif", 15.25F);
+            this.LastName.Location = new System.Drawing.Point(124, 96);
+            this.LastName.Name = "LastName";
+            this.LastName.Size = new System.Drawing.Size(312, 31);
+            this.LastName.TabIndex = 14;
             // 
-            // comboBox1
+            // RoleCb
             // 
-            this.comboBox1.FormattingEnabled = true;
-            this.comboBox1.Location = new System.Drawing.Point(125, 255);
-            this.comboBox1.Name = "comboBox1";
-            this.comboBox1.Size = new System.Drawing.Size(183, 32);
-            this.comboBox1.TabIndex = 15;
+            this.RoleCb.FormattingEnabled = true;
+            this.RoleCb.Location = new System.Drawing.Point(125, 255);
+            this.RoleCb.Name = "RoleCb";
+            this.RoleCb.Size = new System.Drawing.Size(310, 32);
+            this.RoleCb.TabIndex = 15;
             // 
             // AddUserForm
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(11F, 24F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.BackColor = System.Drawing.Color.White;
-            this.ClientSize = new System.Drawing.Size(398, 360);
-            this.Controls.Add(this.comboBox1);
-            this.Controls.Add(this.textBox6);
-            this.Controls.Add(this.textBox4);
-            this.Controls.Add(this.textBox3);
-            this.Controls.Add(this.textBox2);
-            this.Controls.Add(this.textBox1);
-            this.Controls.Add(this.button2);
-            this.Controls.Add(this.button1);
+            this.ClientSize = new System.Drawing.Size(482, 378);
+            this.Controls.Add(this.RoleCb);
+            this.Controls.Add(this.LastName);
+            this.Controls.Add(this.Email);
+            this.Controls.Add(this.Password);
+            this.Controls.Add(this.Login);
+            this.Controls.Add(this.FirstName);
+            this.Controls.Add(this.AddUser);
+            this.Controls.Add(this.Back);
             this.Controls.Add(this.label7);
             this.Controls.Add(this.label6);
             this.Controls.Add(this.label5);
@@ -196,9 +205,13 @@ namespace ynivermag_bad
             this.Controls.Add(this.label2);
             this.Controls.Add(this.label1);
             this.Font = new System.Drawing.Font("Microsoft Sans Serif", 14.25F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(204)));
-            this.Margin = new System.Windows.Forms.Padding(6, 6, 6, 6);
+            this.Icon = ((System.Drawing.Icon)(resources.GetObject("$this.Icon")));
+            this.Margin = new System.Windows.Forms.Padding(6);
+            this.MaximizeBox = false;
+            this.MinimizeBox = false;
             this.Name = "AddUserForm";
-            this.Text = "AddUserForm";
+            this.StartPosition = System.Windows.Forms.FormStartPosition.CenterScreen;
+            this.Text = "Добавление пользователя";
             this.ResumeLayout(false);
             this.PerformLayout();
 
@@ -213,13 +226,13 @@ namespace ynivermag_bad
         private System.Windows.Forms.Label label5;
         private System.Windows.Forms.Label label6;
         private System.Windows.Forms.Label label7;
-        private System.Windows.Forms.Button button1;
-        private System.Windows.Forms.Button button2;
-        private System.Windows.Forms.TextBox textBox1;
-        private System.Windows.Forms.TextBox textBox2;
-        private System.Windows.Forms.TextBox textBox3;
-        private System.Windows.Forms.TextBox textBox4;
-        private System.Windows.Forms.TextBox textBox6;
-        private System.Windows.Forms.ComboBox comboBox1;
+        private System.Windows.Forms.Button Back;
+        private System.Windows.Forms.Button AddUser;
+        private System.Windows.Forms.TextBox FirstName;
+        private System.Windows.Forms.TextBox Login;
+        private System.Windows.Forms.TextBox Password;
+        private System.Windows.Forms.TextBox Email;
+        private System.Windows.Forms.TextBox LastName;
+        private System.Windows.Forms.ComboBox RoleCb;
     }
 }

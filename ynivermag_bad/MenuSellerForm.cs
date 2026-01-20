@@ -17,6 +17,7 @@ namespace ynivermag_bad
         {
             InitializeComponent();
             _fio = FIO;
+            FIOlb.Text = _fio;
         }
 
         private void lists_Click(object sender, EventArgs e)
