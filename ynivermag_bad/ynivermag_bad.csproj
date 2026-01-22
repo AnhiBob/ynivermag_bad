@@ -89,6 +89,7 @@
     <Compile Include="EditUserForm.Designer.cs">
       <DependentUpon>EditUserForm.cs</DependentUpon>
     </Compile>
+    <Compile Include="FilterManager.cs" />
     <Compile Include="Form1.cs">
       <SubType>Form</SubType>
     </Compile>
@@ -114,6 +115,7 @@
       <DependentUpon>MenuTovarovedForm.cs</DependentUpon>
     </Compile>
     <Compile Include="MySQLHelper.cs" />
+    <Compile Include="OrderData.cs" />
     <Compile Include="ProductModel.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
@@ -122,6 +124,12 @@
     </Compile>
     <Compile Include="ShowAll.Designer.cs">
       <DependentUpon>ShowAll.cs</DependentUpon>
+    </Compile>
+    <Compile Include="ShowReports.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="ShowReports.Designer.cs">
+      <DependentUpon>ShowReports.cs</DependentUpon>
     </Compile>
     <Compile Include="UserModel.cs" />
     <Compile Include="Validation.cs" />
@@ -167,6 +175,9 @@
     </Compile>
     <EmbeddedResource Include="ShowAll.resx">
       <DependentUpon>ShowAll.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="ShowReports.resx">
+      <DependentUpon>ShowReports.cs</DependentUpon>
     </EmbeddedResource>
     <None Include="Properties\Settings.settings">
       <Generator>SettingsSingleFileGenerator</Generator>

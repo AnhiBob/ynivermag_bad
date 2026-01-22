@@ -33,5 +33,12 @@ namespace ynivermag_bad
             form1.Show();
             this.Hide();
         }
+
+        private void Report_Click(object sender, EventArgs e)
+        {
+            ShowReports form1 = new ShowReports(_fio, 3);
+            form1.Show();
+            this.Hide();
+        }
     }
 }

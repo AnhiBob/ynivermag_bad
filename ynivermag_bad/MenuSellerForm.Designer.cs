@@ -32,7 +32,7 @@
             this.label1 = new System.Windows.Forms.Label();
             this.FIOlb = new System.Windows.Forms.Label();
             this.button1 = new System.Windows.Forms.Button();
-            this.button2 = new System.Windows.Forms.Button();
+            this.Reports = new System.Windows.Forms.Button();
             this.lists = new System.Windows.Forms.Button();
             this.button4 = new System.Windows.Forms.Button();
             this.groupBox1 = new System.Windows.Forms.GroupBox();
@@ -71,16 +71,17 @@
             this.button1.Text = "Оформить заказ";
             this.button1.UseVisualStyleBackColor = false;
             // 
-            // button2
+            // Reports
             // 
-            this.button2.BackColor = System.Drawing.Color.GreenYellow;
-            this.button2.FlatStyle = System.Windows.Forms.FlatStyle.Popup;
-            this.button2.Location = new System.Drawing.Point(883, 166);
-            this.button2.Name = "button2";
-            this.button2.Size = new System.Drawing.Size(229, 72);
-            this.button2.TabIndex = 4;
-            this.button2.Text = "Отчёт";
-            this.button2.UseVisualStyleBackColor = false;
+            this.Reports.BackColor = System.Drawing.Color.GreenYellow;
+            this.Reports.FlatStyle = System.Windows.Forms.FlatStyle.Popup;
+            this.Reports.Location = new System.Drawing.Point(883, 166);
+            this.Reports.Name = "Reports";
+            this.Reports.Size = new System.Drawing.Size(229, 72);
+            this.Reports.TabIndex = 4;
+            this.Reports.Text = "Отчёт";
+            this.Reports.UseVisualStyleBackColor = false;
+            this.Reports.Click += new System.EventHandler(this.Reports_Click);
             // 
             // lists
             // 
@@ -136,7 +137,7 @@
             this.Controls.Add(this.pictureBox1);
             this.Controls.Add(this.button4);
             this.Controls.Add(this.lists);
-            this.Controls.Add(this.button2);
+            this.Controls.Add(this.Reports);
             this.Controls.Add(this.button1);
             this.Controls.Add(this.label1);
             this.Controls.Add(this.groupBox1);
@@ -161,7 +162,7 @@
         private System.Windows.Forms.Label label1;
         private System.Windows.Forms.Label FIOlb;
         private System.Windows.Forms.Button button1;
-        private System.Windows.Forms.Button button2;
+        private System.Windows.Forms.Button Reports;
         private System.Windows.Forms.Button lists;
         private System.Windows.Forms.Button button4;
         private System.Windows.Forms.GroupBox groupBox1;
