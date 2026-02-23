@@ -144,7 +144,7 @@
             this.Report.TabIndex = 9;
             this.Report.Text = "Сформировать отчёт";
             this.Report.UseVisualStyleBackColor = false;
-            this.Report.Click += new System.EventHandler(this.btnExport_Click);
+            this.Report.Click += new System.EventHandler(this.Report_Click);
             // 
             // InMenu
             // 

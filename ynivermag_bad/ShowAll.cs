@@ -1,13 +1,14 @@
-﻿using System;
+﻿using MySql.Data.MySqlClient;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Data;
 using System.Drawing;
+using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
-using MySql.Data.MySqlClient;
 
 namespace ynivermag_bad
 {
@@ -26,6 +27,7 @@ namespace ynivermag_bad
         private DataTable _productsData;
         private DataTable _clientsData;
         private EditClass _editClass;
+        private ProductImageService _productImageService;
 
         public ShowAll(string FIO, int roleId)
         {
@@ -40,9 +42,12 @@ namespace ynivermag_bad
             ConfigureTabsByRole();
 
             _editClass = new EditClass();
+            _productImageService = new ProductImageService(); // ДОБАВИТЬ
 
             // Настраиваем обработчики событий
             tabControl1.SelectedIndexChanged += TabControl1_SelectedIndexChanged;
+            dataGridViewProduct.Resize += dataGridViewProduct_Resize;
+            dataGridViewProduct.CellFormatting += dataGridViewProduct_CellFormatting;
         }
 
         private MySqlConnection GetNewConnection()
@@ -115,6 +120,7 @@ namespace ynivermag_bad
                 p.price as 'Цена',
                 p.stock_quantity as 'Количество на складе',
                 p.category_id as 'CategoryID',
+                p.photo_path as 'Фото',
                 c.name as 'Категория'
             FROM product p
             LEFT JOIN category c ON p.category_id = c.category_id
@@ -122,45 +128,182 @@ namespace ynivermag_bad
 
                     MySqlCommand cmd = new MySqlCommand(query, connection);
                     MySqlDataAdapter adapter = new MySqlDataAdapter(cmd);
-                    _productsData = new DataTable();
-                    adapter.Fill(_productsData);
+                    DataTable dt = new DataTable();
+                    adapter.Fill(dt);
 
-                    // Копируем данные для отображения
+                    // Создаем DataTable для отображения
                     DataTable displayDt = new DataTable();
                     displayDt.Columns.Add("ID", typeof(int));
                     displayDt.Columns.Add("Название", typeof(string));
                     displayDt.Columns.Add("Цена", typeof(decimal));
                     displayDt.Columns.Add("Количество", typeof(int));
                     displayDt.Columns.Add("Категория", typeof(string));
+                    displayDt.Columns.Add("Фото", typeof(Image));
+                    displayDt.Columns.Add("Имя файла", typeof(string));
 
-                    foreach (DataRow row in _productsData.Rows)
+                    // Фиксированный размер для миниатюр
+                    int thumbnailSize = 60;
+
+                    foreach (DataRow row in dt.Rows)
                     {
+                        string photoFileName = row["Фото"] != DBNull.Value ? row["Фото"].ToString() : null;
+
+                        // Получаем миниатюру
+                        Image thumbnail;
+                        if (!string.IsNullOrEmpty(photoFileName))
+                        {
+                            string imagePath = Path.Combine(_productImageService.GetProductsImagesPath(), photoFileName);
+                            if (File.Exists(imagePath))
+                            {
+                                using (var img = Image.FromFile(imagePath))
+                                {
+                                    thumbnail = _productImageService.ScaleImageToFit(img, thumbnailSize, thumbnailSize);
+                                }
+                            }
+                            else
+                            {
+                                thumbnail = _productImageService.ScaleImageToFit(
+                                    _productImageService.LoadDefaultProductImage(), thumbnailSize, thumbnailSize);
+                            }
+                        }
+                        else
+                        {
+                            thumbnail = _productImageService.ScaleImageToFit(
+                                _productImageService.LoadDefaultProductImage(), thumbnailSize, thumbnailSize);
+                        }
+
+                        // ПРАВИЛЬНЫЙ ПАРСИНГ ЦЕНЫ
+                        decimal price = 0;
+                        object priceValue = row["Цена"];
+
+                        if (priceValue != null && priceValue != DBNull.Value)
+                        {
+                            try
+                            {
+                                // Если это уже decimal
+                                if (priceValue is decimal)
+                                {
+                                    price = (decimal)priceValue;
+                                }
+                                // Если это double или float
+                                else if (priceValue is double || priceValue is float)
+                                {
+                                    price = Convert.ToDecimal(priceValue);
+                                }
+                                // Если это int
+                                else if (priceValue is int)
+                                {
+                                    price = (int)priceValue;
+                                }
+                                // Если это строка
+                                else
+                                {
+                                    string priceStr = priceValue.ToString().Trim();
+
+                                    // Заменяем запятую на точку для парсинга
+                                    priceStr = priceStr.Replace(',', '.');
+
+                                    // Убираем все пробелы
+                                    priceStr = priceStr.Replace(" ", "");
+
+                                    // Парсим с инвариантной культурой (где разделитель - точка)
+                                    if (decimal.TryParse(priceStr,
+                                        System.Globalization.NumberStyles.Any,
+                                        System.Globalization.CultureInfo.InvariantCulture,
+                                        out decimal parsedPrice))
+                                    {
+                                        price = parsedPrice;
+                                    }
+                                    else
+                                    {
+                                        // Если не получилось, пробуем с текущей культурой
+                                        decimal.TryParse(priceStr, out price);
+                                    }
+                                }
+                            }
+                            catch (Exception ex)
+                            {
+                                Console.WriteLine($"Ошибка парсинга цены для товара {row["Название"]}: {ex.Message}");
+                                price = 0;
+                            }
+                        }
+
+
                         displayDt.Rows.Add(
                             Convert.ToInt32(row["ID"]),
                             row["Название"].ToString(),
-                            Convert.ToDecimal(row["Цена"]),
+                            price,  // Используем правильно распарсенную цену
                             Convert.ToInt32(row["Количество на складе"]),
-                            row["Категория"] != DBNull.Value ? row["Категория"].ToString() : "Без категории"
+                            row["Категория"] != DBNull.Value ? row["Категория"].ToString() : "Без категории",
+                            thumbnail,
+                            photoFileName
                         );
                     }
 
-                    // Настройка DataGridView
+                    // Сохраняем выделение если есть
+                    int selectedIndex = -1;
+                    if (dataGridViewProduct.SelectedRows.Count > 0)
+                    {
+                        selectedIndex = dataGridViewProduct.SelectedRows[0].Index;
+                    }
+
+                    // Очищаем колонки
+                    dataGridViewProduct.Columns.Clear();
+
+                    // Настраиваем базовые свойства
+                    dataGridViewProduct.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
+                    dataGridViewProduct.MultiSelect = false;
+                    dataGridViewProduct.RowHeadersVisible = false;
+                    dataGridViewProduct.ReadOnly = true;
+                    dataGridViewProduct.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
+                    dataGridViewProduct.AllowUserToResizeRows = false;
+
+                    // Устанавливаем источник данных
                     dataGridViewProduct.DataSource = displayDt;
 
-                    // Настраиваем отображение
-                    ConfigureDataGridView(dataGridViewProduct);
-
-                    // Дополнительные настройки для товаров
+                    // Настраиваем видимость колонок
                     dataGridViewProduct.Columns["ID"].Visible = false;
-                    dataGridViewProduct.Columns["Цена"].DefaultCellStyle.Format = "C2";
-                    dataGridViewProduct.Columns["Цена"].DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleRight;
-                    dataGridViewProduct.Columns["Количество"].DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleRight;
+                    dataGridViewProduct.Columns["Имя файла"].Visible = false;
 
-                    // Автоподбор ширины колонок
-                    dataGridViewProduct.AutoResizeColumns(DataGridViewAutoSizeColumnsMode.AllCells);
+                    // Настройка колонки с изображением
+                    if (dataGridViewProduct.Columns["Фото"] is DataGridViewImageColumn imageColumn)
+                    {
+                        imageColumn.ImageLayout = DataGridViewImageCellLayout.Zoom;
+                        imageColumn.Width = thumbnailSize + 10;
+                        imageColumn.HeaderText = "Фото";
+                    }
+
+                    // Настройка остальных колонок
+                    dataGridViewProduct.Columns["Название"].Width = 200;
+
+                    // ВАЖНО: правильное форматирование цены
+                    dataGridViewProduct.Columns["Цена"].DefaultCellStyle.Format = "N2"; // Вместо C2, чтобы видеть число
+                    dataGridViewProduct.Columns["Цена"].DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleRight;
+
+                    dataGridViewProduct.Columns["Количество"].DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleRight;
+                    dataGridViewProduct.Columns["Категория"].Width = 150;
+
+                    // Устанавливаем высоту ДЛЯ КАЖДОЙ СТРОКИ
+                    foreach (DataGridViewRow row in dataGridViewProduct.Rows)
+                    {
+                        if (!row.IsNewRow)
+                        {
+                            row.Height = thumbnailSize + 8;
+                        }
+                    }
+
+                    // Также устанавливаем RowTemplate для новых строк
+                    dataGridViewProduct.RowTemplate.Height = thumbnailSize + 8;
+                    dataGridViewProduct.AutoSizeRowsMode = DataGridViewAutoSizeRowsMode.None;
+
+                    // Восстанавливаем выделение
+                    if (selectedIndex >= 0 && selectedIndex < dataGridViewProduct.Rows.Count)
+                    {
+                        dataGridViewProduct.Rows[selectedIndex].Selected = true;
+                    }
 
                     // Подсветка низкого количества
-                    //HighlightLowStock();
+                    HighlightLowStock();
 
                     connection.Close();
                 }
@@ -169,6 +312,19 @@ namespace ynivermag_bad
                     MessageBox.Show($"Ошибка загрузки продуктов: {ex.Message}", "Ошибка",
                                   MessageBoxButtons.OK, MessageBoxIcon.Error);
                 }
+            }
+        }
+
+        private void dataGridViewProduct_CellFormatting(object sender, DataGridViewCellFormattingEventArgs e)
+        {
+            // Если это колонка с изображением и значение null
+            if (dataGridViewProduct.Columns[e.ColumnIndex].Name == "Фото" && e.Value == null)
+            {
+                // Создаем заглушку через сервис
+                int size = dataGridViewProduct.RowTemplate.Height - 8;
+                e.Value = _productImageService.ScaleImageToFit(
+                    _productImageService.LoadDefaultProductImage(), size, size);
+                e.FormattingApplied = true;
             }
         }
 
@@ -183,11 +339,42 @@ namespace ynivermag_bad
                     {
                         row.Cells["Количество"].Style.BackColor = Color.LightPink;
                         row.Cells["Количество"].Style.ForeColor = Color.DarkRed;
+                        row.Cells["Количество"].Style.Font = new Font(dataGridViewProduct.Font, FontStyle.Bold);
                     }
                     else if (quantity < 20)
                     {
                         row.Cells["Количество"].Style.BackColor = Color.LightYellow;
                         row.Cells["Количество"].Style.ForeColor = Color.DarkOrange;
+                        row.Cells["Количество"].Style.Font = new Font(dataGridViewProduct.Font, FontStyle.Bold);
+                    }
+                }
+            }
+        }
+        public Size CalculateOptimalThumbnailSize(DataGridView dgv, int defaultHeight)
+        {
+            // Всегда возвращаем фиксированный размер
+            return new Size(60, 60);
+        }
+        private void dataGridViewProduct_Resize(object sender, EventArgs e)
+        {
+            // При изменении размера обновляем высоту всех строк
+            if (dataGridViewProduct.Rows.Count > 0)
+            {
+                // Фиксированный размер - 60px
+                int thumbnailSize = 60;
+
+                // Обновляем ширину колонки с фото
+                if (dataGridViewProduct.Columns.Contains("Фото"))
+                {
+                    dataGridViewProduct.Columns["Фото"].Width = thumbnailSize + 10;
+                }
+
+                // Обновляем высоту каждой строки
+                foreach (DataGridViewRow row in dataGridViewProduct.Rows)
+                {
+                    if (!row.IsNewRow)
+                    {
+                        row.Height = thumbnailSize + 8;
                     }
                 }
             }
@@ -379,6 +566,9 @@ namespace ynivermag_bad
 
             // Включаем прокрутку
             dgv.ScrollBars = ScrollBars.Both;
+
+            // Отключаем автоматическую смену размера строк
+            dgv.AutoSizeRowsMode = DataGridViewAutoSizeRowsMode.None;
         }
 
         // Дополнительные методы для обновления данных
@@ -693,11 +883,47 @@ namespace ynivermag_bad
                 // Получаем ID продукта
                 int productId = Convert.ToInt32(row.Cells["ID"].Value);
 
+                // Получаем имя файла фото
+                string photoFileName = null;
+                if (row.Cells["Имя файла"].Value != null)
+                {
+                    photoFileName = row.Cells["Имя файла"].Value.ToString();
+                }
+
                 // Загружаем полные данные продукта из базы по ID
                 var productModel = _editClass.LoadProductById(productId);
 
                 if (productModel != null)
                 {
+                    // Загружаем изображение продукта
+                    if (!string.IsNullOrEmpty(photoFileName))
+                    {
+                        try
+                        {
+                            string imagesPath = _productImageService.GetProductsImagesPath();
+                            string imagePath = Path.Combine(imagesPath, photoFileName);
+
+                            if (File.Exists(imagePath))
+                            {
+                                productModel.ProductImage = _productImageService.LoadImageFromFile(imagePath);
+                            }
+                            else
+                            {
+                                productModel.ProductImage = _productImageService.LoadDefaultProductImage();
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            productModel.ProductImage = _productImageService.LoadDefaultProductImage();
+                        }
+                    }
+                    else
+                    {
+                        productModel.ProductImage = _productImageService.LoadDefaultProductImage();
+                    }
+
+                    productModel.photo_path = photoFileName;
+
                     // Открываем форму редактирования
                     var editForm = new EditProductForm(productModel);
 
@@ -756,6 +982,23 @@ namespace ynivermag_bad
                 {
                     connection.Open();
 
+                    // Получаем информацию о продукте перед удалением
+                    string productInfoQuery = "SELECT name, photo_path FROM product WHERE product_id = @ProductId";
+                    MySqlCommand infoCmd = new MySqlCommand(productInfoQuery, connection);
+                    infoCmd.Parameters.AddWithValue("@ProductId", productId);
+
+                    string productName = "";
+                    string photoPath = "";
+
+                    using (var reader = infoCmd.ExecuteReader())
+                    {
+                        if (reader.Read())
+                        {
+                            productName = reader["name"]?.ToString() ?? "";
+                            photoPath = reader["photo_path"] != DBNull.Value ? reader["photo_path"].ToString() : null;
+                        }
+                    }
+
                     // Проверяем, есть ли заказы с этим продуктом
                     string checkOrdersQuery = "SELECT COUNT(*) FROM order_product WHERE product_id = @ProductId";
                     MySqlCommand checkCmd = new MySqlCommand(checkOrdersQuery, connection);
@@ -764,20 +1007,6 @@ namespace ynivermag_bad
 
                     if (orderCount > 0)
                     {
-                        // Получаем название продукта для сообщения
-                        string productNameQuery = "SELECT name FROM product WHERE product_id = @ProductId";
-                        MySqlCommand nameCmd = new MySqlCommand(productNameQuery, connection);
-                        nameCmd.Parameters.AddWithValue("@ProductId", productId);
-
-                        string productName = "";
-                        using (var reader = nameCmd.ExecuteReader())
-                        {
-                            if (reader.Read())
-                            {
-                                productName = reader["name"]?.ToString() ?? "";
-                            }
-                        }
-
                         var confirmResult = MessageBox.Show(
                             $"Продукт '{productName}' используется в {orderCount} заказ(ах).\n\n" +
                             "Удалить продукт и все связанные записи?",
@@ -797,6 +1026,16 @@ namespace ynivermag_bad
                         MySqlCommand deleteOrderProductsCmd = new MySqlCommand(deleteOrderProductsQuery, connection);
                         deleteOrderProductsCmd.Parameters.AddWithValue("@ProductId", productId);
                         deleteOrderProductsCmd.ExecuteNonQuery();
+                    }
+
+                    // Удаляем файл изображения, если он существует и не является заглушкой
+                    if (!string.IsNullOrEmpty(photoPath))
+                    {
+                        string fullPath = Path.Combine(_productImageService.GetProductsImagesPath(), photoPath);
+                        if (File.Exists(fullPath) && !fullPath.Contains("Default.jpg"))
+                        {
+                            File.Delete(fullPath);
+                        }
                     }
 
                     // Удаляем продукт
@@ -821,7 +1060,7 @@ namespace ynivermag_bad
                 catch (MySqlException ex)
                 {
                     // Обработка ошибок внешнего ключа
-                    if (ex.Number == 1451) // Ошибка внешнего ключа (нельзя удалить из-за зависимостей)
+                    if (ex.Number == 1451)
                     {
                         MessageBox.Show("Нельзя удалить продукт, так как он используется в заказах.\n" +
                                       "Пожалуйста, сначала удалите все заказы с этим продуктом.",
@@ -847,7 +1086,7 @@ namespace ynivermag_bad
             }
         }
 
-            private void dataGridViewUser_MouseClick(object sender, MouseEventArgs e)
+        private void dataGridViewUser_MouseClick(object sender, MouseEventArgs e)
         {
             if (e.Button == MouseButtons.Right)
             {
@@ -948,6 +1187,19 @@ namespace ynivermag_bad
                 int userId = Convert.ToInt32(selectedRow.Cells["ID"].Value);
                 DeleteUserFromDatabase(userId);
             }
+        }
+        protected override void OnFormClosing(FormClosingEventArgs e)
+        {
+            // Освобождаем ресурсы изображений в DataGridView
+            foreach (DataGridViewRow row in dataGridViewProduct.Rows)
+            {
+                if (row.Cells["Фото"].Value is Image img)
+                {
+                    img.Dispose();
+                }
+            }
+
+            base.OnFormClosing(e);
         }
 
         private void DeleteUserFromDatabase(int userId)

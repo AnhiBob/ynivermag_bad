@@ -173,7 +173,9 @@
             this.dataGridViewProduct.Name = "dataGridViewProduct";
             this.dataGridViewProduct.Size = new System.Drawing.Size(1042, 457);
             this.dataGridViewProduct.TabIndex = 0;
+            this.dataGridViewProduct.CellFormatting += new System.Windows.Forms.DataGridViewCellFormattingEventHandler(this.dataGridViewProduct_CellFormatting);
             this.dataGridViewProduct.MouseClick += new System.Windows.Forms.MouseEventHandler(this.dataGridViewProduct_MouseClick);
+            this.dataGridViewProduct.Resize += new System.EventHandler(this.dataGridViewProduct_Resize);
             // 
             // tabPage3
             // 

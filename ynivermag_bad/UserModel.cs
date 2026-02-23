@@ -17,4 +17,14 @@ namespace ynivermag_bad
         public int role_id { get; set; }
         public string RoleName { get; set; }
     }
+
+    public class OrderItem
+    {
+        public int ProductId { get; set; }
+        public string ProductName { get; set; }
+        public decimal Price { get; set; }
+        public int Quantity { get; set; }
+        public int AvailableStock { get; set; }
+        public decimal Total => Price * Quantity;
+    }
 }

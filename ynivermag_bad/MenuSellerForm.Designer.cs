@@ -31,7 +31,7 @@
             System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(MenuSellerForm));
             this.label1 = new System.Windows.Forms.Label();
             this.FIOlb = new System.Windows.Forms.Label();
-            this.button1 = new System.Windows.Forms.Button();
+            this.Records = new System.Windows.Forms.Button();
             this.Reports = new System.Windows.Forms.Button();
             this.lists = new System.Windows.Forms.Button();
             this.button4 = new System.Windows.Forms.Button();
@@ -60,16 +60,17 @@
             this.FIOlb.TabIndex = 1;
             this.FIOlb.Text = "роль";
             // 
-            // button1
+            // Records
             // 
-            this.button1.BackColor = System.Drawing.Color.GreenYellow;
-            this.button1.FlatStyle = System.Windows.Forms.FlatStyle.Popup;
-            this.button1.Location = new System.Drawing.Point(883, 88);
-            this.button1.Name = "button1";
-            this.button1.Size = new System.Drawing.Size(229, 72);
-            this.button1.TabIndex = 3;
-            this.button1.Text = "Оформить заказ";
-            this.button1.UseVisualStyleBackColor = false;
+            this.Records.BackColor = System.Drawing.Color.GreenYellow;
+            this.Records.FlatStyle = System.Windows.Forms.FlatStyle.Popup;
+            this.Records.Location = new System.Drawing.Point(883, 88);
+            this.Records.Name = "Records";
+            this.Records.Size = new System.Drawing.Size(229, 72);
+            this.Records.TabIndex = 3;
+            this.Records.Text = "Оформить заказ";
+            this.Records.UseVisualStyleBackColor = false;
+            this.Records.Click += new System.EventHandler(this.Records_Click);
             // 
             // Reports
             // 
@@ -138,7 +139,7 @@
             this.Controls.Add(this.button4);
             this.Controls.Add(this.lists);
             this.Controls.Add(this.Reports);
-            this.Controls.Add(this.button1);
+            this.Controls.Add(this.Records);
             this.Controls.Add(this.label1);
             this.Controls.Add(this.groupBox1);
             this.Font = new System.Drawing.Font("Microsoft Sans Serif", 14.25F);
@@ -161,7 +162,7 @@
 
         private System.Windows.Forms.Label label1;
         private System.Windows.Forms.Label FIOlb;
-        private System.Windows.Forms.Button button1;
+        private System.Windows.Forms.Button Records;
         private System.Windows.Forms.Button Reports;
         private System.Windows.Forms.Button lists;
         private System.Windows.Forms.Button button4;

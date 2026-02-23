@@ -28,9 +28,10 @@
         /// </summary>
         private void InitializeComponent()
         {
+            this.components = new System.ComponentModel.Container();
             System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(EditProductForm));
             this.label1 = new System.Windows.Forms.Label();
-            this.Name = new System.Windows.Forms.TextBox();
+            this.NameTB = new System.Windows.Forms.TextBox();
             this.CategoryCb = new System.Windows.Forms.ComboBox();
             this.label2 = new System.Windows.Forms.Label();
             this.label3 = new System.Windows.Forms.Label();
@@ -40,6 +41,10 @@
             this.Count = new System.Windows.Forms.TextBox();
             this.Back = new System.Windows.Forms.Button();
             this.EditProduct = new System.Windows.Forms.Button();
+            this.pictureBoxProduct = new System.Windows.Forms.PictureBox();
+            this.button1 = new System.Windows.Forms.Button();
+            this.toolTip1 = new System.Windows.Forms.ToolTip(this.components);
+            ((System.ComponentModel.ISupportInitialize)(this.pictureBoxProduct)).BeginInit();
             this.SuspendLayout();
             // 
             // label1
@@ -51,13 +56,13 @@
             this.label1.TabIndex = 0;
             this.label1.Text = "Редактировать";
             // 
-            // Name
+            // NameTB
             // 
-            this.Name.Font = new System.Drawing.Font("Microsoft Sans Serif", 15.25F);
-            this.Name.Location = new System.Drawing.Point(147, 49);
-            this.Name.Name = "Name";
-            this.Name.Size = new System.Drawing.Size(292, 31);
-            this.Name.TabIndex = 1;
+            this.NameTB.Font = new System.Drawing.Font("Microsoft Sans Serif", 15.25F);
+            this.NameTB.Location = new System.Drawing.Point(147, 49);
+            this.NameTB.Name = "NameTB";
+            this.NameTB.Size = new System.Drawing.Size(292, 31);
+            this.NameTB.TabIndex = 1;
             // 
             // CategoryCb
             // 
@@ -110,6 +115,8 @@
             this.Price.Name = "Price";
             this.Price.Size = new System.Drawing.Size(292, 31);
             this.Price.TabIndex = 7;
+            this.Price.TextChanged += new System.EventHandler(this.Price_TextChanged);
+            this.Price.Leave += new System.EventHandler(this.Price_Leave);
             // 
             // Count
             // 
@@ -118,6 +125,7 @@
             this.Count.Name = "Count";
             this.Count.Size = new System.Drawing.Size(292, 31);
             this.Count.TabIndex = 8;
+            this.Count.TextChanged += new System.EventHandler(this.Count_TextChanged);
             // 
             // Back
             // 
@@ -143,12 +151,38 @@
             this.EditProduct.UseVisualStyleBackColor = false;
             this.EditProduct.Click += new System.EventHandler(this.EditProduct_Click);
             // 
+            // pictureBoxProduct
+            // 
+            this.pictureBoxProduct.Location = new System.Drawing.Point(456, 13);
+            this.pictureBoxProduct.Name = "pictureBoxProduct";
+            this.pictureBoxProduct.Size = new System.Drawing.Size(265, 169);
+            this.pictureBoxProduct.TabIndex = 11;
+            this.pictureBoxProduct.TabStop = false;
+            this.pictureBoxProduct.Click += new System.EventHandler(this.pictureBoxProduct_Click);
+            this.pictureBoxProduct.DragDrop += new System.Windows.Forms.DragEventHandler(this.pictureBoxProduct_DragDrop);
+            this.pictureBoxProduct.DragEnter += new System.Windows.Forms.DragEventHandler(this.pictureBoxProduct_DragEnter);
+            this.pictureBoxProduct.MouseHover += new System.EventHandler(this.pictureBoxProduct_MouseHover);
+            // 
+            // button1
+            // 
+            this.button1.BackColor = System.Drawing.Color.GreenYellow;
+            this.button1.FlatStyle = System.Windows.Forms.FlatStyle.Popup;
+            this.button1.Location = new System.Drawing.Point(456, 188);
+            this.button1.Name = "button1";
+            this.button1.Size = new System.Drawing.Size(265, 36);
+            this.button1.TabIndex = 12;
+            this.button1.Text = "Обзор";
+            this.button1.UseVisualStyleBackColor = false;
+            this.button1.Click += new System.EventHandler(this.btnLoadImage_Click);
+            // 
             // EditProductForm
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(11F, 24F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.BackColor = System.Drawing.Color.White;
-            this.ClientSize = new System.Drawing.Size(471, 325);
+            this.ClientSize = new System.Drawing.Size(733, 328);
+            this.Controls.Add(this.button1);
+            this.Controls.Add(this.pictureBoxProduct);
             this.Controls.Add(this.EditProduct);
             this.Controls.Add(this.Back);
             this.Controls.Add(this.Count);
@@ -158,15 +192,17 @@
             this.Controls.Add(this.label3);
             this.Controls.Add(this.label2);
             this.Controls.Add(this.CategoryCb);
-            this.Controls.Add(this.Name);
+            this.Controls.Add(this.NameTB);
             this.Controls.Add(this.label1);
             this.Font = new System.Drawing.Font("Microsoft Sans Serif", 14.25F);
             this.Icon = ((System.Drawing.Icon)(resources.GetObject("$this.Icon")));
             this.Margin = new System.Windows.Forms.Padding(6);
             this.MaximizeBox = false;
             this.MinimizeBox = false;
+            this.Name = "EditProductForm";
             this.StartPosition = System.Windows.Forms.FormStartPosition.CenterScreen;
             this.Text = "EditProductForm";
+            ((System.ComponentModel.ISupportInitialize)(this.pictureBoxProduct)).EndInit();
             this.ResumeLayout(false);
             this.PerformLayout();
 
@@ -175,7 +211,7 @@
         #endregion
 
         private System.Windows.Forms.Label label1;
-        private System.Windows.Forms.TextBox Name;
+        private System.Windows.Forms.TextBox NameTB;
         private System.Windows.Forms.ComboBox CategoryCb;
         private System.Windows.Forms.Label label2;
         private System.Windows.Forms.Label label3;
@@ -185,5 +221,8 @@
         private System.Windows.Forms.TextBox Count;
         private System.Windows.Forms.Button Back;
         private System.Windows.Forms.Button EditProduct;
+        private System.Windows.Forms.PictureBox pictureBoxProduct;
+        private System.Windows.Forms.Button button1;
+        private System.Windows.Forms.ToolTip toolTip1;
     }
 }

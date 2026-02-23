@@ -40,5 +40,13 @@ namespace ynivermag_bad
             form1.Show();
             this.Hide();
         }
+
+        private void Records_Click(object sender, EventArgs e)
+        {
+            RecordsSellerForm form1 = new RecordsSellerForm(_fio, 2);
+            form1.Show();
+            this.Hide();
+
+        }
     }
 }

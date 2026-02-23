@@ -62,7 +62,46 @@ namespace ynivermag_bad
                 }
             }
         }
+        public ProductModel LoadProductById(int productId)
+        {
+            using (var connection = new MySqlConnection(Connection.ConnectionString))
+            {
+                try
+                {
+                    connection.Open();
+                    string query = @"SELECT product_id, name, price, stock_quantity, category_id, photo_path 
+                           FROM product WHERE product_id = @ProductId";
 
+                    using (MySqlCommand cmd = new MySqlCommand(query, connection))
+                    {
+                        cmd.Parameters.AddWithValue("@ProductId", productId);
+
+                        using (var reader = cmd.ExecuteReader())
+                        {
+                            if (reader.Read())
+                            {
+                                return new ProductModel
+                                {
+                                    product_id = reader.GetInt32("product_id"),
+                                    name = reader.GetString("name"),
+                                    price = reader.GetDecimal("price"),
+                                    stock_quantity = reader.GetInt32("stock_quantity"),
+                                    category_id = reader.GetInt32("category_id"),
+                                    photo_path = reader.IsDBNull(reader.GetOrdinal("photo_path")) ?
+                                        null : reader.GetString("photo_path")
+                                };
+                            }
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show($"Ошибка загрузки продукта: {ex.Message}", "Ошибка",
+                                  MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
+            }
+            return null;
+        }
         public void UpdateClientInDatabase(ClientModel client)
         {
             using (var connection = new MySqlConnection(Connection.ConnectionString))
@@ -96,51 +135,9 @@ namespace ynivermag_bad
             }
         }
 
-        public ProductModel LoadProductById(int productId)
-        {
-            using (var connection = new MySqlConnection(Connection.ConnectionString))
-            {
-                try
-                {
-                    connection.Open();
-                    string query = @"SELECT 
-                product_id,
-                name,
-                price,
-                stock_quantity,
-                category_id
-            FROM product
-            WHERE product_id = @ProductId";
+       
 
-                    MySqlCommand cmd = new MySqlCommand(query, connection);
-                    cmd.Parameters.AddWithValue("@ProductId", productId);
-
-                    using (MySqlDataReader reader = cmd.ExecuteReader())
-                    {
-                        if (reader.Read())
-                        {
-                            return new ProductModel
-                            {
-                                product_id = reader.GetInt32("product_id"),
-                                name = reader["name"]?.ToString() ?? "",
-                                price = reader.GetDecimal("price"),
-                                stock_quantity = reader.GetInt32("stock_quantity"),
-                                category_id = reader.GetInt32("category_id")
-                            };
-                        }
-                    }
-                    connection.Close();
-                    return null;
-                }
-                catch (Exception ex)
-                {
-                    MessageBox.Show($"Ошибка загрузки продукта: {ex.Message}");
-                    return null;
-                }
-            }
-        }
-
-        public void UpdateProductInDatabase(ProductModel product)
+        public bool UpdateProductInDatabase(ProductModel product)
         {
             using (var connection = new MySqlConnection(Connection.ConnectionString))
             {
@@ -148,25 +145,39 @@ namespace ynivermag_bad
                 {
                     connection.Open();
                     string query = @"UPDATE product 
-                SET name = @Name,
-                    price = @Price,
-                    stock_quantity = @StockQuantity,
-                    category_id = @CategoryId
-                WHERE product_id = @ProductId";
+                           SET name = @Name,
+                               price = @Price,
+                               stock_quantity = @StockQuantity,
+                               category_id = @CategoryId,
+                               photo_path = @PhotoPath
+                           WHERE product_id = @ProductId";
 
-                    MySqlCommand cmd = new MySqlCommand(query, connection);
-                    cmd.Parameters.AddWithValue("@Name", product.name);
-                    cmd.Parameters.AddWithValue("@Price", product.price);
-                    cmd.Parameters.AddWithValue("@StockQuantity", product.stock_quantity);
-                    cmd.Parameters.AddWithValue("@CategoryId", product.category_id);
-                    cmd.Parameters.AddWithValue("@ProductId", product.product_id);
+                    using (MySqlCommand cmd = new MySqlCommand(query, connection))
+                    {
+                        cmd.Parameters.AddWithValue("@ProductId", product.product_id);
+                        cmd.Parameters.AddWithValue("@Name", product.name);
+                        cmd.Parameters.AddWithValue("@Price", product.price);
+                        cmd.Parameters.AddWithValue("@StockQuantity", product.stock_quantity);
+                        cmd.Parameters.AddWithValue("@CategoryId", product.category_id);
 
-                    cmd.ExecuteNonQuery();
-                    connection.Close();
+                        if (!string.IsNullOrEmpty(product.photo_path))
+                        {
+                            cmd.Parameters.AddWithValue("@PhotoPath", product.photo_path);
+                        }
+                        else
+                        {
+                            cmd.Parameters.AddWithValue("@PhotoPath", DBNull.Value);
+                        }
+
+                        int rowsAffected = cmd.ExecuteNonQuery();
+                        return rowsAffected > 0;
+                    }
                 }
                 catch (Exception ex)
                 {
-                    MessageBox.Show($"Ошибка обновления продукта: {ex.Message}");
+                    MessageBox.Show($"Ошибка обновления продукта: {ex.Message}", "Ошибка",
+                                  MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    return false;
                 }
             }
         }

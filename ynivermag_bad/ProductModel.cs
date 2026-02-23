@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using System.Drawing;
 
 namespace ynivermag_bad
 {
@@ -15,5 +16,8 @@ namespace ynivermag_bad
         public int category_id { get; set; }
         public string description { get; set; }
         public string CategoryName { get; set; }
+        public string photo_path { get; set; }
+        public Image ProductImage { get; set; }
+
     }
 }

@@ -29,6 +29,7 @@ namespace ynivermag_bad
         /// </summary>
         private void InitializeComponent()
         {
+            this.components = new System.ComponentModel.Container();
             System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(AddProductForm));
             this.Back = new System.Windows.Forms.Button();
             this.AddProduct = new System.Windows.Forms.Button();
@@ -37,10 +38,14 @@ namespace ynivermag_bad
             this.label3 = new System.Windows.Forms.Label();
             this.label4 = new System.Windows.Forms.Label();
             this.label5 = new System.Windows.Forms.Label();
-            this.Name = new System.Windows.Forms.TextBox();
+            this.NameTB = new System.Windows.Forms.TextBox();
             this.Price = new System.Windows.Forms.TextBox();
             this.Count = new System.Windows.Forms.TextBox();
             this.CategoryCb = new System.Windows.Forms.ComboBox();
+            this.pictureBoxProduct = new System.Windows.Forms.PictureBox();
+            this.button1 = new System.Windows.Forms.Button();
+            this.toolTip1 = new System.Windows.Forms.ToolTip(this.components);
+            ((System.ComponentModel.ISupportInitialize)(this.pictureBoxProduct)).BeginInit();
             this.SuspendLayout();
             // 
             // Back
@@ -113,13 +118,13 @@ namespace ynivermag_bad
             this.label5.TabIndex = 6;
             this.label5.Text = "Категория";
             // 
-            // Name
+            // NameTB
             // 
-            this.Name.Font = new System.Drawing.Font("Microsoft Sans Serif", 15.25F);
-            this.Name.Location = new System.Drawing.Point(166, 77);
-            this.Name.Name = "Name";
-            this.Name.Size = new System.Drawing.Size(326, 31);
-            this.Name.TabIndex = 7;
+            this.NameTB.Font = new System.Drawing.Font("Microsoft Sans Serif", 15.25F);
+            this.NameTB.Location = new System.Drawing.Point(166, 77);
+            this.NameTB.Name = "NameTB";
+            this.NameTB.Size = new System.Drawing.Size(326, 31);
+            this.NameTB.TabIndex = 7;
             // 
             // Price
             // 
@@ -128,6 +133,7 @@ namespace ynivermag_bad
             this.Price.Name = "Price";
             this.Price.Size = new System.Drawing.Size(326, 31);
             this.Price.TabIndex = 8;
+            this.Price.TextChanged += new System.EventHandler(this.Price_TextChanged);
             // 
             // Count
             // 
@@ -145,16 +151,42 @@ namespace ynivermag_bad
             this.CategoryCb.Size = new System.Drawing.Size(325, 32);
             this.CategoryCb.TabIndex = 10;
             // 
+            // pictureBoxProduct
+            // 
+            this.pictureBoxProduct.Location = new System.Drawing.Point(509, 12);
+            this.pictureBoxProduct.Name = "pictureBoxProduct";
+            this.pictureBoxProduct.Size = new System.Drawing.Size(240, 167);
+            this.pictureBoxProduct.TabIndex = 11;
+            this.pictureBoxProduct.TabStop = false;
+            this.pictureBoxProduct.Click += new System.EventHandler(this.pictureBoxProduct_Click);
+            this.pictureBoxProduct.DragDrop += new System.Windows.Forms.DragEventHandler(this.pictureBoxProduct_DragDrop);
+            this.pictureBoxProduct.DragEnter += new System.Windows.Forms.DragEventHandler(this.pictureBoxProduct_DragEnter);
+            this.pictureBoxProduct.MouseHover += new System.EventHandler(this.pictureBoxProduct_MouseHover);
+            // 
+            // button1
+            // 
+            this.button1.BackColor = System.Drawing.Color.GreenYellow;
+            this.button1.FlatStyle = System.Windows.Forms.FlatStyle.Popup;
+            this.button1.Location = new System.Drawing.Point(509, 187);
+            this.button1.Name = "button1";
+            this.button1.Size = new System.Drawing.Size(240, 32);
+            this.button1.TabIndex = 12;
+            this.button1.Text = "Обзор";
+            this.button1.UseVisualStyleBackColor = false;
+            this.button1.Click += new System.EventHandler(this.btnLoadImage_Click);
+            // 
             // AddProductForm
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(11F, 24F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.BackColor = System.Drawing.Color.White;
-            this.ClientSize = new System.Drawing.Size(514, 321);
+            this.ClientSize = new System.Drawing.Size(761, 313);
+            this.Controls.Add(this.button1);
+            this.Controls.Add(this.pictureBoxProduct);
             this.Controls.Add(this.CategoryCb);
             this.Controls.Add(this.Count);
             this.Controls.Add(this.Price);
-            this.Controls.Add(this.Name);
+            this.Controls.Add(this.NameTB);
             this.Controls.Add(this.label5);
             this.Controls.Add(this.label4);
             this.Controls.Add(this.label3);
@@ -165,8 +197,10 @@ namespace ynivermag_bad
             this.Font = new System.Drawing.Font("Microsoft Sans Serif", 14.25F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(204)));
             this.Icon = ((System.Drawing.Icon)(resources.GetObject("$this.Icon")));
             this.Margin = new System.Windows.Forms.Padding(6);
+            this.Name = "AddProductForm";
             this.StartPosition = System.Windows.Forms.FormStartPosition.CenterScreen;
             this.Text = "Добавление Товара";
+            ((System.ComponentModel.ISupportInitialize)(this.pictureBoxProduct)).EndInit();
             this.ResumeLayout(false);
             this.PerformLayout();
 
@@ -181,9 +215,12 @@ namespace ynivermag_bad
         private System.Windows.Forms.Label label3;
         private System.Windows.Forms.Label label4;
         private System.Windows.Forms.Label label5;
-        private System.Windows.Forms.TextBox Name;
+        private System.Windows.Forms.TextBox NameTB;
         private System.Windows.Forms.TextBox Price;
         private System.Windows.Forms.TextBox Count;
         private System.Windows.Forms.ComboBox CategoryCb;
+        private System.Windows.Forms.PictureBox pictureBoxProduct;
+        private System.Windows.Forms.Button button1;
+        private System.Windows.Forms.ToolTip toolTip1;
     }
 }
