@@ -28,6 +28,7 @@
         /// </summary>
         private void InitializeComponent()
         {
+            this.components = new System.ComponentModel.Container();
             System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(EditClientForm));
             this.label1 = new System.Windows.Forms.Label();
             this.FirstName = new System.Windows.Forms.TextBox();
@@ -42,6 +43,7 @@
             this.label6 = new System.Windows.Forms.Label();
             this.Back = new System.Windows.Forms.Button();
             this.EditClient = new System.Windows.Forms.Button();
+            this.toolTip1 = new System.Windows.Forms.ToolTip(this.components);
             this.SuspendLayout();
             // 
             // label1
@@ -60,6 +62,7 @@
             this.FirstName.Name = "FirstName";
             this.FirstName.Size = new System.Drawing.Size(316, 31);
             this.FirstName.TabIndex = 1;
+            this.FirstName.TextChanged += new System.EventHandler(this.FirstName_TextChanged);
             // 
             // LastName
             // 
@@ -68,6 +71,7 @@
             this.LastName.Name = "LastName";
             this.LastName.Size = new System.Drawing.Size(316, 31);
             this.LastName.TabIndex = 2;
+            this.LastName.TextChanged += new System.EventHandler(this.LastName_TextChanged);
             // 
             // Phone
             // 
@@ -85,6 +89,7 @@
             this.Email.Name = "Email";
             this.Email.Size = new System.Drawing.Size(316, 31);
             this.Email.TabIndex = 4;
+            this.Email.TextChanged += new System.EventHandler(this.Email_TextChanged);
             // 
             // Address
             // 
@@ -93,6 +98,7 @@
             this.Address.Name = "Address";
             this.Address.Size = new System.Drawing.Size(316, 31);
             this.Address.TabIndex = 5;
+            this.Address.TextChanged += new System.EventHandler(this.Address_TextChanged);
             // 
             // label2
             // 
@@ -183,8 +189,9 @@
             this.Controls.Add(this.FirstName);
             this.Controls.Add(this.label1);
             this.Font = new System.Drawing.Font("Microsoft Sans Serif", 14.25F);
+            this.FormBorderStyle = System.Windows.Forms.FormBorderStyle.FixedSingle;
             this.Icon = ((System.Drawing.Icon)(resources.GetObject("$this.Icon")));
-            this.Margin = new System.Windows.Forms.Padding(6, 6, 6, 6);
+            this.Margin = new System.Windows.Forms.Padding(6);
             this.MaximizeBox = false;
             this.MinimizeBox = false;
             this.Name = "EditClientForm";
@@ -210,5 +217,6 @@
         private System.Windows.Forms.Label label6;
         private System.Windows.Forms.Button Back;
         private System.Windows.Forms.Button EditClient;
+        private System.Windows.Forms.ToolTip toolTip1;
     }
 }

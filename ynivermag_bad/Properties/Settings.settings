@@ -9,7 +9,7 @@
       <Value Profile="(Default)">root</Value>
     </Setting>
     <Setting Name="database" Type="System.String" Scope="User">
-      <Value Profile="(Default)">ynivermag</Value>
+      <Value Profile="(Default)">ynivermagdb</Value>
     </Setting>
     <Setting Name="pwd" Type="System.String" Scope="User">
       <Value Profile="(Default)">root</Value>

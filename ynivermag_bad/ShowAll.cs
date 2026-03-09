@@ -1,13 +1,11 @@
 ﻿using MySql.Data.MySqlClient;
 using System;
 using System.Collections.Generic;
-using System.ComponentModel;
 using System.Data;
 using System.Drawing;
+using System.Drawing.Imaging;
 using System.IO;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using System.Windows.Forms;
 
 namespace ynivermag_bad
@@ -16,70 +14,200 @@ namespace ynivermag_bad
     {
         private int _roleID;
         private string _fio;
-
-        private TabPage _tabClients;
-        private TabPage _tabProduct;
-        private TabPage _tabUsers;
+        private string _login;
+        private int _currentUserId;
         private string _connection;
-
-        // Для хранения оригинальных DataTable
-        private DataTable _usersData;
-        private DataTable _productsData;
-        private DataTable _clientsData;
         private EditClass _editClass;
         private ProductImageService _productImageService;
 
-        public ShowAll(string FIO, int roleId)
+        // Вкладки
+        private TabPage _tabClients;
+        private TabPage _tabProduct;
+        private TabPage _tabUsers;
+
+        // Данные
+        private DataTable _usersData;
+        private DataTable _productsData;
+        private DataTable _clientsData;
+
+        // Размер миниатюр
+        private const int THUMBNAIL_SIZE = 80;
+
+        // Состояние редактирования
+        private bool _isEditing = false;
+        private int _editingId = 0;
+        private string _editingEntityType = "";
+
+        public ShowAll(string FIO, int roleId, string login = null)
         {
             InitializeComponent();
             _roleID = roleId;
             _fio = FIO;
+            _login = login;
+            _connection = Connection.ConnectionString;
+            _editClass = new EditClass();
+            _productImageService = new ProductImageService();
+
+            // Получаем ID текущего пользователя
+            _currentUserId = GetCurrentUserId();
+
             FIOlb.Text = _fio;
             _tabClients = tabPage1;
             _tabProduct = tabPage2;
             _tabUsers = tabPage3;
-            _connection = Connection.ConnectionString;
+
+            // Настройка вкладок по ролям
             ConfigureTabsByRole();
 
-            _editClass = new EditClass();
-            _productImageService = new ProductImageService(); // ДОБАВИТЬ
-
-            // Настраиваем обработчики событий
+            // Подписка на события
             tabControl1.SelectedIndexChanged += TabControl1_SelectedIndexChanged;
-            dataGridViewProduct.Resize += dataGridViewProduct_Resize;
-            dataGridViewProduct.CellFormatting += dataGridViewProduct_CellFormatting;
+
+            // Настройка DataGridView
+            ConfigureAllGrids();
+
+            // Контекстные меню
+            SetupContextMenus();
+
+            // Настройка видимости кнопок добавления
+            ConfigureAddButtons();
         }
 
-        private MySqlConnection GetNewConnection()
+        #region ============ ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ ============
+
+        private MySqlConnection GetNewConnection() => new MySqlConnection(_connection);
+
+        private int GetCurrentUserId()
         {
-            return new MySqlConnection(_connection);
+            try
+            {
+                using (var conn = GetNewConnection())
+                {
+                    conn.Open();
+
+                    // Пытаемся найти по логину
+                    if (!string.IsNullOrEmpty(_login))
+                    {
+                        string sqlLogin = "SELECT user_id FROM user WHERE username = @login";
+                        MySqlCommand cmdLogin = new MySqlCommand(sqlLogin, conn);
+                        cmdLogin.Parameters.AddWithValue("@login", _login);
+                        object resultLogin = cmdLogin.ExecuteScalar();
+                        if (resultLogin != null)
+                            return Convert.ToInt32(resultLogin);
+                    }
+
+                    // Если не нашли по логину, пробуем по ФИО
+                    string sqlFio = "SELECT user_id FROM user WHERE CONCAT(last_name, ' ', first_name) = @fio";
+                    MySqlCommand cmdFio = new MySqlCommand(sqlFio, conn);
+                    cmdFio.Parameters.AddWithValue("@fio", _fio);
+                    object resultFio = cmdFio.ExecuteScalar();
+                    if (resultFio != null)
+                        return Convert.ToInt32(resultFio);
+
+                    return 1; // Запасной вариант
+                }
+            }
+            catch
+            {
+                return 1;
+            }
         }
+
+        private void ShowInfo(string message)
+        {
+            MessageBox.Show(message, "Информация", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+
+        private void ShowError(string message)
+        {
+            MessageBox.Show(message, "Ошибка", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+
+        private void ShowWarning(string message)
+        {
+            MessageBox.Show(message, "Предупреждение", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+
+        private void ConfigureAddButtons()
+        {
+            // По умолчанию все кнопки невидимы
+            AddProduct.Visible = false;
+            AddClient.Visible = false;
+            AddUser.Visible = false;
+
+            switch (_roleID)
+            {
+                case 1: // Админ
+                    AddProduct.Visible = true;
+                    AddClient.Visible = true;
+                    AddUser.Visible = true;
+                    break;
+                case 2: // Продавец
+                    AddClient.Visible = true;
+                    break;
+                case 3: // Товаровед
+                    AddProduct.Visible = true;
+                    break;
+            }
+        }
+
+        private void ConfigureAllGrids()
+        {
+            // Настройка каждого DataGridView
+            ConfigureDataGridView(dataGridViewClient);
+            ConfigureDataGridView(dataGridViewProduct);
+            ConfigureDataGridView(dataGridViewUser);
+
+            // Специальная настройка для товаров
+            ConfigureProductGridView();
+        }
+
+        private void ConfigureDataGridView(DataGridView dgv)
+        {
+            dgv.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
+            dgv.MultiSelect = false;
+            dgv.RowHeadersVisible = false;
+            dgv.ReadOnly = true;
+            dgv.AllowUserToAddRows = false;
+            dgv.AllowUserToDeleteRows = false;
+            dgv.AllowUserToOrderColumns = false;
+            dgv.AllowUserToResizeColumns = true;
+            dgv.AllowUserToResizeRows = false;
+
+            dgv.DefaultCellStyle.SelectionBackColor = Color.FromArgb(76, 175, 80);
+            dgv.DefaultCellStyle.SelectionForeColor = Color.White;
+
+            dgv.CellClick += (s, e) =>
+            {
+                if (e.RowIndex >= 0)
+                {
+                    dgv.Rows[e.RowIndex].Selected = true;
+                }
+            };
+        }
+
+        #endregion
+
+        #region ============ НАВИГАЦИЯ ============
 
         private void TabControl1_SelectedIndexChanged(object sender, EventArgs e)
         {
-            // Загружаем данные при переключении вкладок
             LoadCurrentTabData();
         }
 
         private void LoadCurrentTabData()
         {
-            if (tabControl1.SelectedTab == null)
-                return;
+            if (tabControl1.SelectedTab == null) return;
 
-            string tabName = tabControl1.SelectedTab.Name;
-
-            switch (tabName)
+            switch (tabControl1.SelectedTab.Name)
             {
                 case "tabPage1": // Клиенты
-                    if (_clientsData == null || dataGridViewClient.DataSource == null)
-                        LoadClientsData();
+                    LoadClientsData();
                     break;
                 case "tabPage2": // Товары
-                    if (_productsData == null || dataGridViewProduct.DataSource == null)
-                        LoadProductData();
+                    LoadProductData();
                     break;
                 case "tabPage3": // Пользователи
-                    if (_usersData == null || dataGridViewUser.DataSource == null)
+                    if (_roleID == 1) // Только админ видит пользователей
                         LoadUsersData();
                     break;
             }
@@ -89,22 +217,47 @@ namespace ynivermag_bad
         {
             if (_roleID == 1)
             {
-                MenuAdminForm admin = new MenuAdminForm(_fio);
-                admin.Show();
+                new MenuAdminForm(_fio).Show();
                 this.Hide();
             }
             else if (_roleID == 2)
             {
-                MenuSellerForm seller = new MenuSellerForm(_fio);
-                seller.Show();
+                new MenuSellerForm(_fio).Show();
                 this.Hide();
             }
             else if (_roleID == 3)
             {
-                MenuTovarovedForm menu = new MenuTovarovedForm(_fio);
-                menu.Show();
+                new MenuTovarovedForm(_fio).Show();
                 this.Hide();
             }
+        }
+
+        private void ConfigureTabsByRole()
+        {
+            tabControl1.TabPages.Clear();
+
+            switch (_roleID)
+            {
+                case 1: // Админ
+                    tabControl1.TabPages.AddRange(new[] { _tabClients, _tabProduct, _tabUsers });
+                    break;
+                case 2: // Продавец
+                    tabControl1.TabPages.AddRange(new[] { _tabClients, _tabProduct });
+                    break;
+                case 3: // Товаровед
+                    tabControl1.TabPages.AddRange(new[] { _tabProduct });
+                    break;
+            }
+        }
+
+        #endregion
+
+        #region ============ ТОВАРЫ ============
+
+        private void ConfigureProductGridView()
+        {
+            dataGridViewProduct.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
+            dataGridViewProduct.RowTemplate.Height = THUMBNAIL_SIZE + 10;
         }
 
         private void LoadProductData()
@@ -114,217 +267,74 @@ namespace ynivermag_bad
                 try
                 {
                     connection.Open();
-                    string query = @"SELECT 
-                p.product_id as 'ID',
-                p.name as 'Название',
-                p.price as 'Цена',
-                p.stock_quantity as 'Количество на складе',
-                p.category_id as 'CategoryID',
-                p.photo_path as 'Фото',
-                c.name as 'Категория'
-            FROM product p
-            LEFT JOIN category c ON p.category_id = c.category_id
-            ORDER BY p.name";
 
-                    MySqlCommand cmd = new MySqlCommand(query, connection);
-                    MySqlDataAdapter adapter = new MySqlDataAdapter(cmd);
+                    string query = @"SELECT 
+                        p.product_id as ID,
+                        p.name as Название,
+                        p.price as Цена,
+                        p.stock_quantity as Количество,
+                        c.name as Категория,
+                        p.photo_path as PhotoPath,
+                        p.isActive as Активен,
+                        p.category_id as CategoryId
+                    FROM product p
+                    LEFT JOIN category c ON p.category_id = c.category_id
+                    WHERE p.isActive = 1
+                    ORDER BY p.name";
+
+                    MySqlDataAdapter adapter = new MySqlDataAdapter(query, connection);
                     DataTable dt = new DataTable();
                     adapter.Fill(dt);
 
-                    // Создаем DataTable для отображения
-                    DataTable displayDt = new DataTable();
-                    displayDt.Columns.Add("ID", typeof(int));
-                    displayDt.Columns.Add("Название", typeof(string));
-                    displayDt.Columns.Add("Цена", typeof(decimal));
-                    displayDt.Columns.Add("Количество", typeof(int));
-                    displayDt.Columns.Add("Категория", typeof(string));
-                    displayDt.Columns.Add("Фото", typeof(Image));
-                    displayDt.Columns.Add("Имя файла", typeof(string));
-
-                    // Фиксированный размер для миниатюр
-                    int thumbnailSize = 60;
+                    // Добавляем колонку для изображения
+                    dt.Columns.Add("Фото", typeof(Image));
 
                     foreach (DataRow row in dt.Rows)
                     {
-                        string photoFileName = row["Фото"] != DBNull.Value ? row["Фото"].ToString() : null;
-
-                        // Получаем миниатюру
-                        Image thumbnail;
-                        if (!string.IsNullOrEmpty(photoFileName))
-                        {
-                            string imagePath = Path.Combine(_productImageService.GetProductsImagesPath(), photoFileName);
-                            if (File.Exists(imagePath))
-                            {
-                                using (var img = Image.FromFile(imagePath))
-                                {
-                                    thumbnail = _productImageService.ScaleImageToFit(img, thumbnailSize, thumbnailSize);
-                                }
-                            }
-                            else
-                            {
-                                thumbnail = _productImageService.ScaleImageToFit(
-                                    _productImageService.LoadDefaultProductImage(), thumbnailSize, thumbnailSize);
-                            }
-                        }
-                        else
-                        {
-                            thumbnail = _productImageService.ScaleImageToFit(
-                                _productImageService.LoadDefaultProductImage(), thumbnailSize, thumbnailSize);
-                        }
-
-                        // ПРАВИЛЬНЫЙ ПАРСИНГ ЦЕНЫ
-                        decimal price = 0;
-                        object priceValue = row["Цена"];
-
-                        if (priceValue != null && priceValue != DBNull.Value)
-                        {
-                            try
-                            {
-                                // Если это уже decimal
-                                if (priceValue is decimal)
-                                {
-                                    price = (decimal)priceValue;
-                                }
-                                // Если это double или float
-                                else if (priceValue is double || priceValue is float)
-                                {
-                                    price = Convert.ToDecimal(priceValue);
-                                }
-                                // Если это int
-                                else if (priceValue is int)
-                                {
-                                    price = (int)priceValue;
-                                }
-                                // Если это строка
-                                else
-                                {
-                                    string priceStr = priceValue.ToString().Trim();
-
-                                    // Заменяем запятую на точку для парсинга
-                                    priceStr = priceStr.Replace(',', '.');
-
-                                    // Убираем все пробелы
-                                    priceStr = priceStr.Replace(" ", "");
-
-                                    // Парсим с инвариантной культурой (где разделитель - точка)
-                                    if (decimal.TryParse(priceStr,
-                                        System.Globalization.NumberStyles.Any,
-                                        System.Globalization.CultureInfo.InvariantCulture,
-                                        out decimal parsedPrice))
-                                    {
-                                        price = parsedPrice;
-                                    }
-                                    else
-                                    {
-                                        // Если не получилось, пробуем с текущей культурой
-                                        decimal.TryParse(priceStr, out price);
-                                    }
-                                }
-                            }
-                            catch (Exception ex)
-                            {
-                                Console.WriteLine($"Ошибка парсинга цены для товара {row["Название"]}: {ex.Message}");
-                                price = 0;
-                            }
-                        }
-
-
-                        displayDt.Rows.Add(
-                            Convert.ToInt32(row["ID"]),
-                            row["Название"].ToString(),
-                            price,  // Используем правильно распарсенную цену
-                            Convert.ToInt32(row["Количество на складе"]),
-                            row["Категория"] != DBNull.Value ? row["Категория"].ToString() : "Без категории",
-                            thumbnail,
-                            photoFileName
-                        );
+                        string photoPath = row["PhotoPath"]?.ToString();
+                        row["Фото"] = LoadThumbnail(photoPath);
                     }
 
-                    // Сохраняем выделение если есть
-                    int selectedIndex = -1;
-                    if (dataGridViewProduct.SelectedRows.Count > 0)
+                    _productsData = dt;
+                    dataGridViewProduct.DataSource = _productsData;
+
+                    // Скрываем служебные колонки
+                    if (dataGridViewProduct.Columns["ID"] != null)
+                        dataGridViewProduct.Columns["ID"].Visible = false;
+                    if (dataGridViewProduct.Columns["PhotoPath"] != null)
+                        dataGridViewProduct.Columns["PhotoPath"].Visible = false;
+                    if (dataGridViewProduct.Columns["CategoryId"] != null)
+                        dataGridViewProduct.Columns["CategoryId"].Visible = false;
+                    if (dataGridViewProduct.Columns["Активен"] != null)
+                        dataGridViewProduct.Columns["Активен"].Visible = false;
+
+                    // Настройка отображения колонок
+                    if (dataGridViewProduct.Columns["Название"] != null)
                     {
-                        selectedIndex = dataGridViewProduct.SelectedRows[0].Index;
+                        dataGridViewProduct.Columns["Название"].Width = 250;
+                        dataGridViewProduct.Columns["Название"].DefaultCellStyle.WrapMode = DataGridViewTriState.True;
                     }
-
-                    // Очищаем колонки
-                    dataGridViewProduct.Columns.Clear();
-
-                    // Настраиваем базовые свойства
-                    dataGridViewProduct.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
-                    dataGridViewProduct.MultiSelect = false;
-                    dataGridViewProduct.RowHeadersVisible = false;
-                    dataGridViewProduct.ReadOnly = true;
-                    dataGridViewProduct.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
-                    dataGridViewProduct.AllowUserToResizeRows = false;
-
-                    // Устанавливаем источник данных
-                    dataGridViewProduct.DataSource = displayDt;
-
-                    // Настраиваем видимость колонок
-                    dataGridViewProduct.Columns["ID"].Visible = false;
-                    dataGridViewProduct.Columns["Имя файла"].Visible = false;
-
-                    // Настройка колонки с изображением
-                    if (dataGridViewProduct.Columns["Фото"] is DataGridViewImageColumn imageColumn)
+                    if (dataGridViewProduct.Columns["Цена"] != null)
                     {
-                        imageColumn.ImageLayout = DataGridViewImageCellLayout.Zoom;
-                        imageColumn.Width = thumbnailSize + 10;
-                        imageColumn.HeaderText = "Фото";
+                        dataGridViewProduct.Columns["Цена"].DefaultCellStyle.Format = "C2";
+                        dataGridViewProduct.Columns["Цена"].DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleRight;
                     }
-
-                    // Настройка остальных колонок
-                    dataGridViewProduct.Columns["Название"].Width = 200;
-
-                    // ВАЖНО: правильное форматирование цены
-                    dataGridViewProduct.Columns["Цена"].DefaultCellStyle.Format = "N2"; // Вместо C2, чтобы видеть число
-                    dataGridViewProduct.Columns["Цена"].DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleRight;
-
-                    dataGridViewProduct.Columns["Количество"].DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleRight;
-                    dataGridViewProduct.Columns["Категория"].Width = 150;
-
-                    // Устанавливаем высоту ДЛЯ КАЖДОЙ СТРОКИ
-                    foreach (DataGridViewRow row in dataGridViewProduct.Rows)
+                    if (dataGridViewProduct.Columns["Количество"] != null)
                     {
-                        if (!row.IsNewRow)
-                        {
-                            row.Height = thumbnailSize + 8;
-                        }
+                        dataGridViewProduct.Columns["Количество"].DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleRight;
                     }
-
-                    // Также устанавливаем RowTemplate для новых строк
-                    dataGridViewProduct.RowTemplate.Height = thumbnailSize + 8;
-                    dataGridViewProduct.AutoSizeRowsMode = DataGridViewAutoSizeRowsMode.None;
-
-                    // Восстанавливаем выделение
-                    if (selectedIndex >= 0 && selectedIndex < dataGridViewProduct.Rows.Count)
+                    if (dataGridViewProduct.Columns["Фото"] != null)
                     {
-                        dataGridViewProduct.Rows[selectedIndex].Selected = true;
+                        dataGridViewProduct.Columns["Фото"].Width = 80;
                     }
 
-                    // Подсветка низкого количества
+                    // Подсветка остатков
                     HighlightLowStock();
-
-                    connection.Close();
                 }
                 catch (Exception ex)
                 {
-                    MessageBox.Show($"Ошибка загрузки продуктов: {ex.Message}", "Ошибка",
-                                  MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    ShowError($"Ошибка загрузки товаров: {ex.Message}");
                 }
-            }
-        }
-
-        private void dataGridViewProduct_CellFormatting(object sender, DataGridViewCellFormattingEventArgs e)
-        {
-            // Если это колонка с изображением и значение null
-            if (dataGridViewProduct.Columns[e.ColumnIndex].Name == "Фото" && e.Value == null)
-            {
-                // Создаем заглушку через сервис
-                int size = dataGridViewProduct.RowTemplate.Height - 8;
-                e.Value = _productImageService.ScaleImageToFit(
-                    _productImageService.LoadDefaultProductImage(), size, size);
-                e.FormattingApplied = true;
             }
         }
 
@@ -334,51 +344,80 @@ namespace ynivermag_bad
             {
                 if (row.Cells["Количество"].Value != null)
                 {
-                    int quantity = Convert.ToInt32(row.Cells["Количество"].Value);
-                    if (quantity < 10)
-                    {
+                    int qty = Convert.ToInt32(row.Cells["Количество"].Value);
+                    if (qty < 5)
                         row.Cells["Количество"].Style.BackColor = Color.LightPink;
-                        row.Cells["Количество"].Style.ForeColor = Color.DarkRed;
-                        row.Cells["Количество"].Style.Font = new Font(dataGridViewProduct.Font, FontStyle.Bold);
-                    }
-                    else if (quantity < 20)
-                    {
+                    else if (qty < 10)
                         row.Cells["Количество"].Style.BackColor = Color.LightYellow;
-                        row.Cells["Количество"].Style.ForeColor = Color.DarkOrange;
-                        row.Cells["Количество"].Style.Font = new Font(dataGridViewProduct.Font, FontStyle.Bold);
-                    }
                 }
             }
         }
-        public Size CalculateOptimalThumbnailSize(DataGridView dgv, int defaultHeight)
+
+        private Image LoadThumbnail(string photoPath)
         {
-            // Всегда возвращаем фиксированный размер
-            return new Size(60, 60);
-        }
-        private void dataGridViewProduct_Resize(object sender, EventArgs e)
-        {
-            // При изменении размера обновляем высоту всех строк
-            if (dataGridViewProduct.Rows.Count > 0)
+            try
             {
-                // Фиксированный размер - 60px
-                int thumbnailSize = 60;
+                if (string.IsNullOrEmpty(photoPath))
+                    return CreatePlaceholder();
 
-                // Обновляем ширину колонки с фото
-                if (dataGridViewProduct.Columns.Contains("Фото"))
-                {
-                    dataGridViewProduct.Columns["Фото"].Width = thumbnailSize + 10;
-                }
+                string fullPath = Path.Combine(_productImageService.GetProductsImagesPath(), photoPath);
 
-                // Обновляем высоту каждой строки
-                foreach (DataGridViewRow row in dataGridViewProduct.Rows)
+                if (!File.Exists(fullPath))
+                    return CreatePlaceholder();
+
+                using (FileStream fs = new FileStream(fullPath, FileMode.Open, FileAccess.Read, FileShare.Read))
+                using (Image img = Image.FromStream(fs))
                 {
-                    if (!row.IsNewRow)
+                    Bitmap thumb = new Bitmap(THUMBNAIL_SIZE, THUMBNAIL_SIZE, PixelFormat.Format32bppArgb);
+                    using (Graphics g = Graphics.FromImage(thumb))
                     {
-                        row.Height = thumbnailSize + 8;
+                        g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
+                        g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.HighQuality;
+                        g.Clear(Color.White);
+
+                        float ratio = Math.Min((float)THUMBNAIL_SIZE / img.Width, (float)THUMBNAIL_SIZE / img.Height);
+                        int w = (int)(img.Width * ratio);
+                        int h = (int)(img.Height * ratio);
+                        int x = (THUMBNAIL_SIZE - w) / 2;
+                        int y = (THUMBNAIL_SIZE - h) / 2;
+
+                        g.DrawImage(img, x, y, w, h);
                     }
+                    return thumb;
                 }
             }
+            catch
+            {
+                return CreatePlaceholder();
+            }
         }
+
+        private Image CreatePlaceholder()
+        {
+            Bitmap bmp = new Bitmap(THUMBNAIL_SIZE, THUMBNAIL_SIZE, PixelFormat.Format32bppArgb);
+            using (Graphics g = Graphics.FromImage(bmp))
+            {
+                g.Clear(Color.FromArgb(245, 245, 245));
+                using (Pen pen = new Pen(Color.FromArgb(200, 200, 200)))
+                {
+                    g.DrawRectangle(pen, 1, 1, THUMBNAIL_SIZE - 3, THUMBNAIL_SIZE - 3);
+                }
+                using (Font f = new Font("Arial", 8, FontStyle.Regular))
+                using (Brush b = new SolidBrush(Color.FromArgb(150, 150, 150)))
+                {
+                    string text = "нет фото";
+                    SizeF sz = g.MeasureString(text, f);
+                    g.DrawString(text, f, b,
+                        (THUMBNAIL_SIZE - sz.Width) / 2,
+                        (THUMBNAIL_SIZE - sz.Height) / 2);
+                }
+            }
+            return bmp;
+        }
+
+        #endregion
+
+        #region ============ КЛИЕНТЫ ============
 
         private void LoadClientsData()
         {
@@ -387,22 +426,24 @@ namespace ynivermag_bad
                 try
                 {
                     connection.Open();
-                    string query = @"SELECT 
-                client_id as 'ID',
-                email as 'Email',
-                first_name as 'Имя',
-                last_name as 'Фамилия',
-                phone as 'Телефон',
-                address as 'Адрес'
-            FROM client
-            ORDER BY last_name, first_name";
 
-                    MySqlCommand cmd = new MySqlCommand(query, connection);
-                    MySqlDataAdapter adapter = new MySqlDataAdapter(cmd);
+                    string query = @"SELECT 
+                        client_id as ID,
+                        last_name as Фамилия,
+                        first_name as Имя,
+                        email as Email,
+                        phone as Телефон,
+                        address as Адрес,
+                        isActive as Активен
+                    FROM client
+                    WHERE isActive = 1
+                    ORDER BY last_name, first_name";
+
+                    MySqlDataAdapter adapter = new MySqlDataAdapter(query, connection);
                     _clientsData = new DataTable();
                     adapter.Fill(_clientsData);
 
-                    // Копируем и форматируем данные
+                    // Создаем отображаемую таблицу с ФИО
                     DataTable displayDt = new DataTable();
                     displayDt.Columns.Add("ID", typeof(int));
                     displayDt.Columns.Add("ФИО", typeof(string));
@@ -416,90 +457,55 @@ namespace ynivermag_bad
                         displayDt.Rows.Add(
                             Convert.ToInt32(row["ID"]),
                             fullName,
-                            row["Email"].ToString(),
-                            row["Телефон"].ToString(),
-                            row["Адрес"].ToString()
+                            row["Email"]?.ToString() ?? "",
+                            row["Телефон"]?.ToString() ?? "",
+                            row["Адрес"]?.ToString() ?? ""
                         );
                     }
 
                     dataGridViewClient.DataSource = displayDt;
-                    ConfigureDataGridView(dataGridViewClient);
                     dataGridViewClient.Columns["ID"].Visible = false;
-
-                    // Автоподбор ширины
-                    dataGridViewClient.AutoResizeColumns(DataGridViewAutoSizeColumnsMode.AllCells);
-
-                    connection.Close();
+                    dataGridViewClient.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
                 }
                 catch (Exception ex)
                 {
-                    MessageBox.Show($"Ошибка загрузки клиентов: {ex.Message}", "Ошибка",
-                                  MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    ShowError($"Ошибка загрузки клиентов: {ex.Message}");
                 }
             }
         }
 
-        private void ConfigureTabsByRole()
-        {
-            tabControl1.TabPages.Clear();
+        #endregion
 
-            // В зависимости от роли показываем разные вкладки
-            switch (_roleID)
-            {
-                case 1: // Администратор - все вкладки
-                    tabControl1.TabPages.AddRange(new TabPage[]
-                    {
-                        _tabClients,
-                        _tabProduct,
-                        _tabUsers
-                    });
-                    break;
-                case 2: // Продавец - только клиенты и товары
-                    tabControl1.TabPages.AddRange(new TabPage[]
-                    {
-                        _tabClients,
-                        _tabProduct
-                    });
-                    break;
-                case 3: // Товаровед - только товары
-                    tabControl1.TabPages.AddRange(new TabPage[]
-                    {
-                        _tabProduct
-                    });
-                    break;
-            }
-        }
-
-        private void ShowInfo(string message)
-        {
-            MessageBox.Show(message, "Информация", MessageBoxButtons.OK, MessageBoxIcon.Information);
-        }
+        #region ============ ПОЛЬЗОВАТЕЛИ ============
 
         private void LoadUsersData()
         {
+            if (_roleID != 1) return; // Только админ
+
             using (var connection = GetNewConnection())
             {
                 try
                 {
                     connection.Open();
-                    string query = @"SELECT 
-                u.user_id as 'ID',
-                u.last_name as 'Фамилия',
-                u.first_name as 'Имя',
-                u.email as 'Email',
-                u.username as 'Логин',
-                u.role_id as 'RoleID',
-                r.role_name as 'Роль'
-            FROM user u
-            INNER JOIN role r ON u.role_id = r.role_id
-            ORDER BY u.last_name, u.first_name";
 
-                    MySqlCommand cmd = new MySqlCommand(query, connection);
-                    MySqlDataAdapter adapter = new MySqlDataAdapter(cmd);
+                    string query = @"SELECT 
+                        u.user_id as ID,
+                        u.last_name as Фамилия,
+                        u.first_name as Имя,
+                        u.email as Email,
+                        u.username as Логин,
+                        r.role_name as Роль,
+                        u.isActive as Активен
+                    FROM user u
+                    INNER JOIN role r ON u.role_id = r.role_id
+                    WHERE u.isActive = 1
+                    ORDER BY u.last_name, u.first_name";
+
+                    MySqlDataAdapter adapter = new MySqlDataAdapter(query, connection);
                     _usersData = new DataTable();
                     adapter.Fill(_usersData);
 
-                    // Копируем и форматируем данные
+                    // Создаем отображаемую таблицу с ФИО
                     DataTable displayDt = new DataTable();
                     displayDt.Columns.Add("ID", typeof(int));
                     displayDt.Columns.Add("ФИО", typeof(string));
@@ -513,803 +519,472 @@ namespace ynivermag_bad
                         displayDt.Rows.Add(
                             Convert.ToInt32(row["ID"]),
                             fullName,
-                            row["Email"].ToString(),
-                            row["Логин"].ToString(),
-                            row["Роль"].ToString()
+                            row["Email"]?.ToString() ?? "",
+                            row["Логин"]?.ToString() ?? "",
+                            row["Роль"]?.ToString() ?? ""
                         );
                     }
 
                     dataGridViewUser.DataSource = displayDt;
-                    ConfigureDataGridView(dataGridViewUser);
                     dataGridViewUser.Columns["ID"].Visible = false;
-
-                    // Автоподбор ширины
-                    dataGridViewUser.AutoResizeColumns(DataGridViewAutoSizeColumnsMode.AllCells);
-
-                    connection.Close();
+                    dataGridViewUser.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
                 }
                 catch (Exception ex)
                 {
-                    MessageBox.Show($"Ошибка загрузки пользователей: {ex.Message}", "Ошибка",
-                                  MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    ShowError($"Ошибка загрузки пользователей: {ex.Message}");
                 }
             }
         }
 
-        private void ShowAll_Load(object sender, EventArgs e)
+        #endregion
+
+        #region ============ ПРОВЕРКА ЗАВИСИМОСТЕЙ ============
+
+        private bool HasDependencies(string tableName, int id)
         {
-            // Загружаем данные для активной вкладки при запуске
-            LoadCurrentTabData();
+            using (var connection = GetNewConnection())
+            {
+                try
+                {
+                    connection.Open();
+
+                    switch (tableName)
+                    {
+                        case "product":
+                            // Проверяем, есть ли товар в заказах (order_product)
+                            string productQuery = "SELECT COUNT(*) FROM order_product WHERE product_id = @id";
+                            MySqlCommand productCmd = new MySqlCommand(productQuery, connection);
+                            productCmd.Parameters.AddWithValue("@id", id);
+
+                            // Также проверяем историю изменений (inventory_history)
+                            string historyQuery = "SELECT COUNT(*) FROM inventory_history WHERE product_id = @id";
+                            MySqlCommand historyCmd = new MySqlCommand(historyQuery, connection);
+                            historyCmd.Parameters.AddWithValue("@id", id);
+
+                            int orderCount = Convert.ToInt32(productCmd.ExecuteScalar());
+                            int historyCount = Convert.ToInt32(historyCmd.ExecuteScalar());
+
+                            return orderCount > 0 || historyCount > 0;
+
+                        case "client":
+                            // Проверяем, есть ли у клиента заказы (order)
+                            string clientQuery = "SELECT COUNT(*) FROM `order` WHERE client_id = @id";
+                            MySqlCommand clientCmd = new MySqlCommand(clientQuery, connection);
+                            clientCmd.Parameters.AddWithValue("@id", id);
+                            return Convert.ToInt32(clientCmd.ExecuteScalar()) > 0;
+
+                        case "user":
+                            // Проверяем, есть ли у пользователя заказы (order)
+                            string userQuery = "SELECT COUNT(*) FROM `order` WHERE user_id = @id";
+                            MySqlCommand userCmd = new MySqlCommand(userQuery, connection);
+                            userCmd.Parameters.AddWithValue("@id", id);
+
+                            // Также проверяем историю изменений (inventory_history)
+                            string userHistoryQuery = "SELECT COUNT(*) FROM inventory_history WHERE user_id = @id";
+                            MySqlCommand userHistoryCmd = new MySqlCommand(userHistoryQuery, connection);
+                            userHistoryCmd.Parameters.AddWithValue("@id", id);
+
+                            int userOrderCount = Convert.ToInt32(userCmd.ExecuteScalar());
+                            int userHistoryCount = Convert.ToInt32(userHistoryCmd.ExecuteScalar());
+
+                            return userOrderCount > 0 || userHistoryCount > 0;
+
+                        default:
+                            return false;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show($"Ошибка проверки зависимостей: {ex.Message}", "Ошибка",
+                        MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    return true; // В случае ошибки считаем, что зависимости есть
+                }
+            }
         }
 
-        private void ConfigureDataGridView(DataGridView dgv)
+        #endregion
+
+        #region ============ КОНТЕКСТНОЕ МЕНЮ ============
+
+        private void SetupContextMenus()
         {
-            if (dgv == null) return;
-
-            // Базовые настройки
-            dgv.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
-            dgv.MultiSelect = false;
-            dgv.RowHeadersVisible = false;
-            dgv.ReadOnly = true;
-            dgv.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
-
-            // Стиль выделения
-            dgv.DefaultCellStyle.SelectionBackColor = Color.YellowGreen;
-            dgv.DefaultCellStyle.SelectionForeColor = Color.Black;
-
-            // Альтернативные строки
-            dgv.AlternatingRowsDefaultCellStyle.BackColor = Color.LightGray;
-
-            // Шрифт заголовков
-            dgv.ColumnHeadersDefaultCellStyle.Font = new Font(dgv.Font, FontStyle.Bold);
-            dgv.ColumnHeadersDefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleCenter;
-
-            // Включаем прокрутку
-            dgv.ScrollBars = ScrollBars.Both;
-
-            // Отключаем автоматическую смену размера строк
-            dgv.AutoSizeRowsMode = DataGridViewAutoSizeRowsMode.None;
+            dataGridViewClient.MouseClick += DataGridView_MouseClick;
+            dataGridViewProduct.MouseClick += DataGridView_MouseClick;
+            dataGridViewUser.MouseClick += DataGridView_MouseClick;
         }
 
-        // Дополнительные методы для обновления данных
-        public void RefreshData()
+        private void DataGridView_MouseClick(object sender, MouseEventArgs e)
         {
-            // Сбрасываем кэш данных
-            _usersData = null;
-            _productsData = null;
-            _clientsData = null;
+            if (e.Button != MouseButtons.Right) return;
 
-            // Перезагружаем текущую вкладку
-            LoadCurrentTabData();
+            DataGridView dgv = sender as DataGridView;
+            var hit = dgv.HitTest(e.X, e.Y);
+            if (hit.RowIndex < 0) return;
+
+            dgv.ClearSelection();
+            dgv.Rows[hit.RowIndex].Selected = true;
+
+            // Проверяем права на редактирование/удаление
+            bool canEdit = false;
+            bool canDelete = false;
+
+            if (dgv == dataGridViewProduct && (_roleID == 1 || _roleID == 3))
+            {
+                canEdit = true;
+                canDelete = true;
+            }
+            else if (dgv == dataGridViewClient && (_roleID == 1 || _roleID == 2))
+            {
+                canEdit = true;
+                canDelete = true;
+            }
+            else if (dgv == dataGridViewUser && _roleID == 1)
+            {
+                canEdit = true;
+                canDelete = true;
+            }
+
+            if (!canEdit && !canDelete) return;
+
+            var menu = new ContextMenuStrip();
+
+            if (canEdit)
+            {
+                var editMenuItem = new ToolStripMenuItem("Редактировать");
+                editMenuItem.Click += (s, args) => EditRecord(dgv);
+                menu.Items.Add(editMenuItem);
+            }
+
+            if (canDelete)
+            {
+                var deleteMenuItem = new ToolStripMenuItem("Удалить");
+                deleteMenuItem.Click += (s, args) => DeleteRecord(dgv);
+                menu.Items.Add(deleteMenuItem);
+            }
+
+            if (menu.Items.Count > 0)
+                menu.Show(dgv, e.Location);
         }
+
+        #endregion
+
+        #region ============ РЕДАКТИРОВАНИЕ ============
+
+        private void EditRecord(DataGridView dgv)
+        {
+            if (dgv.SelectedRows.Count == 0) return;
+
+            try
+            {
+                int id = Convert.ToInt32(dgv.SelectedRows[0].Cells["ID"].Value);
+
+                if (dgv == dataGridViewProduct)
+                {
+                    var productModel = _editClass.LoadProductById(id);
+                    if (productModel != null)
+                    {
+                        var editForm = new EditProductForm(productModel);
+                        if (editForm.ShowDialog() == DialogResult.OK)
+                        {
+                            _editClass.UpdateProductInDatabase(editForm.Product);
+                            _productsData = null;
+                            LoadProductData();
+                            ShowInfo("✅ Товар успешно обновлен");
+                        }
+                    }
+                    else
+                    {
+                        ShowInfo("Не удалось загрузить данные товара");
+                    }
+                }
+                else if (dgv == dataGridViewClient)
+                {
+                    var clientModel = _editClass.LoadClientById(id);
+                    if (clientModel != null)
+                    {
+                        var editForm = new EditClientForm(clientModel);
+                        if (editForm.ShowDialog() == DialogResult.OK)
+                        {
+                            _editClass.UpdateClientInDatabase(editForm.Client);
+                            _clientsData = null;
+                            LoadClientsData();
+                            ShowInfo("✅ Клиент успешно обновлен");
+                        }
+                    }
+                    else
+                    {
+                        ShowInfo("Не удалось загрузить данные клиента");
+                    }
+                }
+                else if (dgv == dataGridViewUser && _roleID == 1)
+                {
+                    var userModel = _editClass.LoadUserById(id);
+                    if (userModel != null)
+                    {
+                        var editForm = new EditUserForm(userModel);
+                        if (editForm.ShowDialog() == DialogResult.OK)
+                        {
+                            _editClass.UpdateUserInDatabase(editForm.User);
+                            _usersData = null;
+                            LoadUsersData();
+                            ShowInfo("✅ Пользователь успешно обновлен");
+                        }
+                    }
+                    else
+                    {
+                        ShowInfo("Не удалось загрузить данные пользователя");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                ShowError($"Ошибка при редактировании: {ex.Message}");
+            }
+        }
+
+        #endregion
+
+        #region ============ УДАЛЕНИЕ (SOFT DELETE) ============
+
+        private void DeleteRecord(DataGridView dgv)
+        {
+            if (dgv.SelectedRows.Count == 0) return;
+
+            string entityType = dgv == dataGridViewProduct ? "товар" :
+                               dgv == dataGridViewClient ? "клиента" : "пользователя";
+
+            string entityName = "";
+            int id = 0;
+
+            if (dgv == dataGridViewProduct)
+            {
+                id = Convert.ToInt32(dgv.SelectedRows[0].Cells["ID"].Value);
+                entityName = dgv.SelectedRows[0].Cells["Название"].Value?.ToString() ?? "";
+            }
+            else if (dgv == dataGridViewClient)
+            {
+                id = Convert.ToInt32(dgv.SelectedRows[0].Cells["ID"].Value);
+                entityName = dgv.SelectedRows[0].Cells["ФИО"].Value?.ToString() ?? "";
+            }
+            else if (dgv == dataGridViewUser)
+            {
+                id = Convert.ToInt32(dgv.SelectedRows[0].Cells["ID"].Value);
+                entityName = dgv.SelectedRows[0].Cells["ФИО"].Value?.ToString() ?? "";
+
+                // Проверка на удаление самого себя
+                if (id == _currentUserId)
+                {
+                    MessageBox.Show(
+                        "Вы не можете удалить свой собственный аккаунт!\n\n" +
+                        "Для безопасности системы нельзя удалить учётную запись, под которой вы вошли.",
+                        "Ошибка",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Error);
+                    return;
+                }
+
+                // Проверка на последнего администратора
+                if (IsLastAdmin(id))
+                {
+                    MessageBox.Show(
+                        $"Нельзя удалить пользователя '{entityName}'.\n\n" +
+                        "Это последний активный администратор в системе.",
+                        "Ошибка",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Error);
+                    return;
+                }
+            }
+
+            // Проверка зависимостей
+            string tableName = dgv == dataGridViewProduct ? "product" :
+                              dgv == dataGridViewClient ? "client" : "user";
+
+            if (HasDependencies(tableName, id))
+            {
+                string message = dgv == dataGridViewProduct
+                    ? $"Невозможно удалить товар '{entityName}'.\n\n" +
+                      "Этот товар участвует в продажах. Сначала удалите связанные записи."
+                    : dgv == dataGridViewClient
+                    ? $"Невозможно удалить клиента '{entityName}'.\n\n" +
+                      "У клиента есть история покупок. Сначала удалите связанные записи."
+                    : $"Невозможно удалить пользователя '{entityName}'.\n\n" +
+                      "У пользователя есть действия в системе. Сначала удалите связанные записи.";
+
+                MessageBox.Show(message, "Ошибка удаления", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+
+            // Проверка, не удален ли уже объект
+            using (var connection = GetNewConnection())
+            {
+                try
+                {
+                    connection.Open();
+                    string checkQuery = $"SELECT isActive FROM {tableName} WHERE {tableName}_id = @id";
+                    MySqlCommand checkCmd = new MySqlCommand(checkQuery, connection);
+                    checkCmd.Parameters.AddWithValue("@id", id);
+
+                    object result = checkCmd.ExecuteScalar();
+
+                    if (result != null)
+                    {
+                        bool isActive = Convert.ToBoolean(result);
+
+                        if (!isActive)
+                        {
+                            ShowInfo($"{char.ToUpper(entityType[0]) + entityType.Substring(1)} уже удален");
+                            return;
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    ShowError($"Ошибка проверки статуса: {ex.Message}");
+                    return;
+                }
+            }
+
+            var dialogResult = MessageBox.Show(
+                $"Вы точно хотите удалить {entityType} '{entityName}'?\n\n" +
+                $"{char.ToUpper(entityType[0]) + entityType.Substring(1)} будет помечен как неактивный, но останется в базе данных.",
+                "Подтверждение удаления",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Warning
+            );
+
+            if (dialogResult == DialogResult.Yes)
+            {
+                SoftDeleteRecord(tableName, id, entityType, dgv);
+            }
+        }
+
+        private void SoftDeleteRecord(string tableName, int id, string entityType, DataGridView dgv)
+        {
+            using (var connection = GetNewConnection())
+            {
+                try
+                {
+                    connection.Open();
+
+                    string query = $"UPDATE {tableName} SET isActive = 0 WHERE {tableName}_id = @id";
+                    MySqlCommand cmd = new MySqlCommand(query, connection);
+                    cmd.Parameters.AddWithValue("@id", id);
+
+                    int affected = cmd.ExecuteNonQuery();
+
+                    if (affected > 0)
+                    {
+                        ShowInfo($"{char.ToUpper(entityType[0]) + entityType.Substring(1)} успешно удален");
+
+                        // Обновляем данные
+                        if (dgv == dataGridViewProduct)
+                            _productsData = null;
+                        else if (dgv == dataGridViewClient)
+                            _clientsData = null;
+                        else if (dgv == dataGridViewUser)
+                            _usersData = null;
+
+                        LoadCurrentTabData();
+                    }
+                    else
+                    {
+                        ShowInfo($"{char.ToUpper(entityType[0]) + entityType.Substring(1)} не найден");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show($"Ошибка при удалении: {ex.Message}", "Ошибка", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
+            }
+        }
+
+        private bool IsLastAdmin(int userId)
+        {
+            using (var connection = GetNewConnection())
+            {
+                try
+                {
+                    connection.Open();
+                    string query = @"SELECT COUNT(*) FROM user 
+                                   WHERE role_id = 1 AND isActive = 1 AND user_id != @id";
+                    MySqlCommand cmd = new MySqlCommand(query, connection);
+                    cmd.Parameters.AddWithValue("@id", userId);
+                    int otherAdmins = Convert.ToInt32(cmd.ExecuteScalar());
+                    return otherAdmins == 0;
+                }
+                catch
+                {
+                    return false;
+                }
+            }
+        }
+
+        #endregion
+
+        #region ============ ДОБАВЛЕНИЕ ============
 
         private void AddProduct_Click(object sender, EventArgs e)
         {
-            AddProductForm addProductForm = new AddProductForm();
-
-            DialogResult result = addProductForm.ShowDialog();
-
-            if (result == DialogResult.OK)
+            var form = new AddProductForm();
+            if (form.ShowDialog() == DialogResult.OK)
             {
+                _productsData = null;
                 LoadProductData();
-                MessageBox.Show("Товар успешно добавлен", "Успех",
-                              MessageBoxButtons.OK, MessageBoxIcon.Information);
+                ShowInfo("✅ Товар успешно добавлен");
             }
         }
 
         private void AddClient_Click(object sender, EventArgs e)
         {
-            AddClientForm addClientForm = new AddClientForm();
-
-            DialogResult result = addClientForm.ShowDialog();
-
-            if (result == DialogResult.OK)
+            var form = new AddClientForm(this);
+            if (form.ShowDialog() == DialogResult.OK)
             {
+                _clientsData = null;
                 LoadClientsData();
-                MessageBox.Show("Клиент успешно добавлен", "Успех",
-                              MessageBoxButtons.OK, MessageBoxIcon.Information);
+                ShowInfo("✅ Клиент успешно добавлен");
             }
         }
 
         private void AddUser_Click(object sender, EventArgs e)
         {
-            AddUserForm addUserForm = new AddUserForm();
-
-            DialogResult result = addUserForm.ShowDialog();
-
-            if (result == DialogResult.OK)
+            if (_roleID != 1)
             {
+                ShowWarning("У вас нет прав для добавления пользователей");
+                return;
+            }
+
+            var form = new AddUserForm();
+            if (form.ShowDialog() == DialogResult.OK)
+            {
+                _usersData = null;
                 LoadUsersData();
-                MessageBox.Show("Пользователь успешно добавлен", "Успех",
-                              MessageBoxButtons.OK, MessageBoxIcon.Information);
+                ShowInfo("✅ Пользователь успешно добавлен");
             }
         }
 
-        //******************************************************************************
-        private void dataGridViewClient_MouseClick(object sender, MouseEventArgs e)
+        #endregion
+
+        #region ============ ЖИЗНЕННЫЙ ЦИКЛ ФОРМЫ ============
+
+        private void ShowAll_Load(object sender, EventArgs e)
         {
-            if (e.Button == MouseButtons.Right)
-            {
-                var hitTest = dataGridViewClient.HitTest(e.X, e.Y);
-                if (hitTest.RowIndex >= 0 && hitTest.RowIndex < dataGridViewClient.Rows.Count)
-                {
-                    dataGridViewClient.ClearSelection();
-                    dataGridViewClient.Rows[hitTest.RowIndex].Selected = true;
-
-                    var contextMenu = new ContextMenuStrip();
-
-                    var editMenuItem = new ToolStripMenuItem("Редактировать");
-                    editMenuItem.Click += (s, args) => EditSelectedClient();
-
-                    var deleteMenuItem = new ToolStripMenuItem("Удалить");
-                    deleteMenuItem.Click += (s, args) => DeleteSelectedClient();
-
-                    contextMenu.Items.Add(editMenuItem);
-                    contextMenu.Items.Add(deleteMenuItem);
-
-                    contextMenu.Show(dataGridViewClient, e.Location);
-                }
-            }
+            LoadCurrentTabData();
         }
 
-        private void EditSelectedClient()
-        {
-            if (dataGridViewClient.SelectedRows.Count == 0)
-            {
-                ShowInfo("Выберите клиента для редактирования");
-                return;
-            }
-
-            var selectedRow = dataGridViewClient.SelectedRows[0];
-            OpenEditFormClient(selectedRow);
-        }
-
-        private void OpenEditFormClient(DataGridViewRow row)
-        {
-            try
-            {
-                // Получаем ID клиента (предполагается, что у вас есть скрытая колонка с ID)
-                int clientId = Convert.ToInt32(row.Cells["ID"].Value);
-
-                // Загружаем полные данные клиента из базы по ID
-                var clientModel = _editClass.LoadClientById(clientId);
-
-                if (clientModel != null)
-                {
-                    // Открываем форму редактирования
-                    var editForm = new EditClientForm(clientModel);
-
-                    if (editForm.ShowDialog() == DialogResult.OK)
-                    {
-                        // Обновляем данные в базе
-                        _editClass.UpdateClientInDatabase(editForm.Client);
-
-                        // Перезагружаем данные
-                        LoadClientsData();
-
-                        ShowInfo("Клиент успешно обновлен");
-                    }
-                }
-                else
-                {
-                    ShowInfo("Не удалось загрузить данные клиента");
-                }
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"Ошибка при открытии формы редактирования: {ex.Message}");
-            }
-        }
-
-        private void DeleteSelectedClient()
-        {
-            if (dataGridViewClient.SelectedRows.Count == 0)
-            {
-                ShowInfo("Выберите клиента для удаления");
-                return;
-            }
-
-            var selectedRow = dataGridViewClient.SelectedRows[0];
-            string clientFullName = selectedRow.Cells["ФИО"].Value?.ToString();
-
-            var result = MessageBox.Show(
-                $"Вы точно хотите удалить клиента '{clientFullName}'?",
-                "Подтверждение удаления",
-                MessageBoxButtons.YesNo,
-                MessageBoxIcon.Warning
-            );
-
-            if (result == DialogResult.Yes)
-            {
-                int clientId = Convert.ToInt32(selectedRow.Cells["ID"].Value);
-                DeleteClientFromDatabase(clientId);
-            }
-        }
-
-        private void DeleteClientFromDatabase(int clientId)
-        {
-            using (var connection = new MySqlConnection(Connection.ConnectionString))
-            {
-                try
-                {
-                    connection.Open();
-
-                    // Проверяем, есть ли заказы у этого клиента
-                    string checkOrdersQuery = "SELECT COUNT(*) FROM `order` WHERE client_id = @ClientId";
-                    MySqlCommand checkCmd = new MySqlCommand(checkOrdersQuery, connection);
-                    checkCmd.Parameters.AddWithValue("@ClientId", clientId);
-                    int orderCount = Convert.ToInt32(checkCmd.ExecuteScalar());
-
-                    if (orderCount > 0)
-                    {
-                        // Получаем имя клиента для сообщения
-                        string clientNameQuery = "SELECT first_name, last_name FROM client WHERE client_id = @ClientId";
-                        MySqlCommand nameCmd = new MySqlCommand(clientNameQuery, connection);
-                        nameCmd.Parameters.AddWithValue("@ClientId", clientId);
-
-                        string clientName = "";
-                        using (var reader = nameCmd.ExecuteReader())
-                        {
-                            if (reader.Read())
-                            {
-                                string firstName = reader["first_name"]?.ToString() ?? "";
-                                string lastName = reader["last_name"]?.ToString() ?? "";
-                                clientName = $"{lastName} {firstName}".Trim();
-                            }
-                        }
-
-                        var confirmResult = MessageBox.Show(
-                            $"У клиента '{clientName}' есть {orderCount} заказ(ов).\n\n" +
-                            "Удалить клиента и все его заказы?",
-                            "Предупреждение",
-                            MessageBoxButtons.YesNo,
-                            MessageBoxIcon.Warning
-                        );
-
-                        if (confirmResult == DialogResult.No)
-                        {
-                            connection.Close();
-                            return;
-                        }
-
-                        // Удаляем записи из order_product для заказов клиента
-                        string deleteOrderProductsQuery = @"DELETE op FROM order_product op 
-                                                   INNER JOIN `order` o ON op.order_id = o.order_id 
-                                                   WHERE o.client_id = @ClientId";
-                        MySqlCommand deleteOrderProductsCmd = new MySqlCommand(deleteOrderProductsQuery, connection);
-                        deleteOrderProductsCmd.Parameters.AddWithValue("@ClientId", clientId);
-                        deleteOrderProductsCmd.ExecuteNonQuery();
-
-                        // Удаляем заказы клиента
-                        string deleteOrdersQuery = "DELETE FROM `order` WHERE client_id = @ClientId";
-                        MySqlCommand deleteOrdersCmd = new MySqlCommand(deleteOrdersQuery, connection);
-                        deleteOrdersCmd.Parameters.AddWithValue("@ClientId", clientId);
-                        deleteOrdersCmd.ExecuteNonQuery();
-                    }
-
-                    // Удаляем клиента
-                    string query = "DELETE FROM client WHERE client_id = @ClientId";
-                    MySqlCommand cmd = new MySqlCommand(query, connection);
-                    cmd.Parameters.AddWithValue("@ClientId", clientId);
-
-                    int affectedRows = cmd.ExecuteNonQuery();
-
-                    if (affectedRows > 0)
-                    {
-                        ShowInfo("Клиент успешно удален");
-                        LoadClientsData(); // Перезагружаем данные
-                    }
-                    else
-                    {
-                        ShowInfo("Клиент не найден");
-                    }
-
-                    connection.Close();
-                }
-                catch (MySqlException ex)
-                {
-                    // Обработка ошибок внешнего ключа
-                    if (ex.Number == 1451) // Ошибка внешнего ключа (нельзя удалить из-за зависимостей)
-                    {
-                        MessageBox.Show("Нельзя удалить клиента, так как есть связанные заказы.\n" +
-                                      "Пожалуйста, сначала удалите все заказы клиента.",
-                                      "Ошибка удаления",
-                                      MessageBoxButtons.OK,
-                                      MessageBoxIcon.Error);
-                    }
-                    else
-                    {
-                        MessageBox.Show($"Ошибка удаления клиента: {ex.Message}",
-                                      "Ошибка",
-                                      MessageBoxButtons.OK,
-                                      MessageBoxIcon.Error);
-                    }
-                }
-                catch (Exception ex)
-                {
-                    MessageBox.Show($"Ошибка удаления клиента: {ex.Message}",
-                                  "Ошибка",
-                                  MessageBoxButtons.OK,
-                                  MessageBoxIcon.Error);
-                }
-            }
-        }
-            //******************************************************************************
-            //******************************************************************************
-
-
-            private void dataGridViewProduct_MouseClick(object sender, MouseEventArgs e)
-        {
-            if (e.Button == MouseButtons.Right)
-            {
-                var hitTest = dataGridViewProduct.HitTest(e.X, e.Y);
-                if (hitTest.RowIndex >= 0 && hitTest.RowIndex < dataGridViewProduct.Rows.Count)
-                {
-                    dataGridViewProduct.ClearSelection();
-                    dataGridViewProduct.Rows[hitTest.RowIndex].Selected = true;
-
-                    var contextMenu = new ContextMenuStrip();
-
-                    var editMenuItem = new ToolStripMenuItem("Редактировать");
-                    editMenuItem.Click += (s, args) => EditSelectedProduct();
-
-                    var deleteMenuItem = new ToolStripMenuItem("Удалить");
-                    deleteMenuItem.Click += (s, args) => DeleteSelectedProduct();
-
-                    contextMenu.Items.Add(editMenuItem);
-                    contextMenu.Items.Add(deleteMenuItem);
-
-                    contextMenu.Show(dataGridViewProduct, e.Location);
-                }
-            }
-        }
-
-        private void EditSelectedProduct()
-        {
-            if (dataGridViewProduct.SelectedRows.Count == 0)
-            {
-                ShowInfo("Выберите продукт для редактирования");
-                return;
-            }
-
-            var selectedRow = dataGridViewProduct.SelectedRows[0];
-            OpenEditFormProduct(selectedRow);
-        }
-
-        private void OpenEditFormProduct(DataGridViewRow row)
-        {
-            try
-            {
-                // Получаем ID продукта
-                int productId = Convert.ToInt32(row.Cells["ID"].Value);
-
-                // Получаем имя файла фото
-                string photoFileName = null;
-                if (row.Cells["Имя файла"].Value != null)
-                {
-                    photoFileName = row.Cells["Имя файла"].Value.ToString();
-                }
-
-                // Загружаем полные данные продукта из базы по ID
-                var productModel = _editClass.LoadProductById(productId);
-
-                if (productModel != null)
-                {
-                    // Загружаем изображение продукта
-                    if (!string.IsNullOrEmpty(photoFileName))
-                    {
-                        try
-                        {
-                            string imagesPath = _productImageService.GetProductsImagesPath();
-                            string imagePath = Path.Combine(imagesPath, photoFileName);
-
-                            if (File.Exists(imagePath))
-                            {
-                                productModel.ProductImage = _productImageService.LoadImageFromFile(imagePath);
-                            }
-                            else
-                            {
-                                productModel.ProductImage = _productImageService.LoadDefaultProductImage();
-                            }
-                        }
-                        catch (Exception ex)
-                        {
-                            productModel.ProductImage = _productImageService.LoadDefaultProductImage();
-                        }
-                    }
-                    else
-                    {
-                        productModel.ProductImage = _productImageService.LoadDefaultProductImage();
-                    }
-
-                    productModel.photo_path = photoFileName;
-
-                    // Открываем форму редактирования
-                    var editForm = new EditProductForm(productModel);
-
-                    if (editForm.ShowDialog() == DialogResult.OK)
-                    {
-                        // Обновляем данные в базе
-                        _editClass.UpdateProductInDatabase(editForm.Product);
-
-                        // Перезагружаем данные
-                        LoadProductData();
-
-                        ShowInfo("Продукт успешно обновлен");
-                    }
-                }
-                else
-                {
-                    ShowInfo("Не удалось загрузить данные продукта");
-                }
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"Ошибка при открытии формы редактирования: {ex.Message}");
-            }
-        }
-
-        private void DeleteSelectedProduct()
-        {
-            if (dataGridViewProduct.SelectedRows.Count == 0)
-            {
-                ShowInfo("Выберите продукт для удаления");
-                return;
-            }
-
-            var selectedRow = dataGridViewProduct.SelectedRows[0];
-            string productName = selectedRow.Cells["Название"].Value?.ToString();
-
-            var result = MessageBox.Show(
-                $"Вы точно хотите удалить продукт '{productName}'?",
-                "Подтверждение удаления",
-                MessageBoxButtons.YesNo,
-                MessageBoxIcon.Warning
-            );
-
-            if (result == DialogResult.Yes)
-            {
-                int productId = Convert.ToInt32(selectedRow.Cells["ID"].Value);
-                DeleteProductFromDatabase(productId);
-            }
-        }
-
-        private void DeleteProductFromDatabase(int productId)
-        {
-            using (var connection = new MySqlConnection(Connection.ConnectionString))
-            {
-                try
-                {
-                    connection.Open();
-
-                    // Получаем информацию о продукте перед удалением
-                    string productInfoQuery = "SELECT name, photo_path FROM product WHERE product_id = @ProductId";
-                    MySqlCommand infoCmd = new MySqlCommand(productInfoQuery, connection);
-                    infoCmd.Parameters.AddWithValue("@ProductId", productId);
-
-                    string productName = "";
-                    string photoPath = "";
-
-                    using (var reader = infoCmd.ExecuteReader())
-                    {
-                        if (reader.Read())
-                        {
-                            productName = reader["name"]?.ToString() ?? "";
-                            photoPath = reader["photo_path"] != DBNull.Value ? reader["photo_path"].ToString() : null;
-                        }
-                    }
-
-                    // Проверяем, есть ли заказы с этим продуктом
-                    string checkOrdersQuery = "SELECT COUNT(*) FROM order_product WHERE product_id = @ProductId";
-                    MySqlCommand checkCmd = new MySqlCommand(checkOrdersQuery, connection);
-                    checkCmd.Parameters.AddWithValue("@ProductId", productId);
-                    int orderCount = Convert.ToInt32(checkCmd.ExecuteScalar());
-
-                    if (orderCount > 0)
-                    {
-                        var confirmResult = MessageBox.Show(
-                            $"Продукт '{productName}' используется в {orderCount} заказ(ах).\n\n" +
-                            "Удалить продукт и все связанные записи?",
-                            "Предупреждение",
-                            MessageBoxButtons.YesNo,
-                            MessageBoxIcon.Warning
-                        );
-
-                        if (confirmResult == DialogResult.No)
-                        {
-                            connection.Close();
-                            return;
-                        }
-
-                        // Удаляем записи из order_product для этого продукта
-                        string deleteOrderProductsQuery = "DELETE FROM order_product WHERE product_id = @ProductId";
-                        MySqlCommand deleteOrderProductsCmd = new MySqlCommand(deleteOrderProductsQuery, connection);
-                        deleteOrderProductsCmd.Parameters.AddWithValue("@ProductId", productId);
-                        deleteOrderProductsCmd.ExecuteNonQuery();
-                    }
-
-                    // Удаляем файл изображения, если он существует и не является заглушкой
-                    if (!string.IsNullOrEmpty(photoPath))
-                    {
-                        string fullPath = Path.Combine(_productImageService.GetProductsImagesPath(), photoPath);
-                        if (File.Exists(fullPath) && !fullPath.Contains("Default.jpg"))
-                        {
-                            File.Delete(fullPath);
-                        }
-                    }
-
-                    // Удаляем продукт
-                    string query = "DELETE FROM product WHERE product_id = @ProductId";
-                    MySqlCommand cmd = new MySqlCommand(query, connection);
-                    cmd.Parameters.AddWithValue("@ProductId", productId);
-
-                    int affectedRows = cmd.ExecuteNonQuery();
-
-                    if (affectedRows > 0)
-                    {
-                        ShowInfo("Продукт успешно удален");
-                        LoadProductData(); // Перезагружаем данные
-                    }
-                    else
-                    {
-                        ShowInfo("Продукт не найден");
-                    }
-
-                    connection.Close();
-                }
-                catch (MySqlException ex)
-                {
-                    // Обработка ошибок внешнего ключа
-                    if (ex.Number == 1451)
-                    {
-                        MessageBox.Show("Нельзя удалить продукт, так как он используется в заказах.\n" +
-                                      "Пожалуйста, сначала удалите все заказы с этим продуктом.",
-                                      "Ошибка удаления",
-                                      MessageBoxButtons.OK,
-                                      MessageBoxIcon.Error);
-                    }
-                    else
-                    {
-                        MessageBox.Show($"Ошибка удаления продукта: {ex.Message}",
-                                      "Ошибка",
-                                      MessageBoxButtons.OK,
-                                      MessageBoxIcon.Error);
-                    }
-                }
-                catch (Exception ex)
-                {
-                    MessageBox.Show($"Ошибка удаления продукта: {ex.Message}",
-                                  "Ошибка",
-                                  MessageBoxButtons.OK,
-                                  MessageBoxIcon.Error);
-                }
-            }
-        }
-
-        private void dataGridViewUser_MouseClick(object sender, MouseEventArgs e)
-        {
-            if (e.Button == MouseButtons.Right)
-            {
-                var hitTest = dataGridViewUser.HitTest(e.X, e.Y);
-                if (hitTest.RowIndex >= 0 && hitTest.RowIndex < dataGridViewUser.Rows.Count)
-                {
-                    dataGridViewUser.ClearSelection();
-                    dataGridViewUser.Rows[hitTest.RowIndex].Selected = true;
-
-                    var contextMenu = new ContextMenuStrip();
-
-                    var editMenuItem = new ToolStripMenuItem("Редактировать");
-                    editMenuItem.Click += (s, args) => EditSelectedUser();
-
-                    var deleteMenuItem = new ToolStripMenuItem("Удалить");
-                    deleteMenuItem.Click += (s, args) => DeleteSelectedUser();
-
-                    contextMenu.Items.Add(editMenuItem);
-                    contextMenu.Items.Add(deleteMenuItem);
-
-                    contextMenu.Show(dataGridViewUser, e.Location);
-                }
-            }
-        }
-
-        private void EditSelectedUser()
-        {
-            if (dataGridViewUser.SelectedRows.Count == 0)
-            {
-                ShowInfo("Выберите пользователя для редактирования");
-                return;
-            }
-
-            var selectedRow = dataGridViewUser.SelectedRows[0];
-            OpenEditFormUser(selectedRow);
-        }
-
-        private void OpenEditFormUser(DataGridViewRow row)
-        {
-            try
-            {
-                // Получаем ID пользователя
-                int userId = Convert.ToInt32(row.Cells["ID"].Value);
-
-                // Загружаем полные данные пользователя из базы по ID
-                var userModel = _editClass.LoadUserById(userId);
-
-                if (userModel != null)
-                {
-                    // Проверьте, что userModel не null и содержит данные
-                    Console.WriteLine($"userModel loaded: ID={userModel.user_id}, Name={userModel.first_name} {userModel.last_name}");
-
-                    // Открываем форму редактирования
-                    var editForm = new EditUserForm(userModel); // userModel не должен быть null!
-
-                    if (editForm.ShowDialog() == DialogResult.OK)
-                    {
-                        // Обновляем данные в базе
-                        _editClass.UpdateUserInDatabase(editForm.User);
-
-                        // Перезагружаем данные
-                        LoadUsersData();
-
-                        ShowInfo("Пользователь успешно обновлен");
-                    }
-                }
-                else
-                {
-                    ShowInfo("Не удалось загрузить данные пользователя");
-                }
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"Ошибка при открытии формы редактирования: {ex.Message}\n\nStackTrace: {ex.StackTrace}");
-            }
-        }
-
-        private void DeleteSelectedUser()
-        {
-            if (dataGridViewUser.SelectedRows.Count == 0)
-            {
-                ShowInfo("Выберите пользователя для удаления");
-                return;
-            }
-
-            var selectedRow = dataGridViewUser.SelectedRows[0];
-            string userName = selectedRow.Cells["ФИО"].Value?.ToString();
-
-            var result = MessageBox.Show(
-                $"Вы точно хотите удалить пользователя '{userName}'?",
-                "Подтверждение удаления",
-                MessageBoxButtons.YesNo,
-                MessageBoxIcon.Warning
-            );
-
-            if (result == DialogResult.Yes)
-            {
-                int userId = Convert.ToInt32(selectedRow.Cells["ID"].Value);
-                DeleteUserFromDatabase(userId);
-            }
-        }
         protected override void OnFormClosing(FormClosingEventArgs e)
         {
-            // Освобождаем ресурсы изображений в DataGridView
-            foreach (DataGridViewRow row in dataGridViewProduct.Rows)
+            if (_productsData != null)
             {
-                if (row.Cells["Фото"].Value is Image img)
+                foreach (DataRow row in _productsData.Rows)
                 {
-                    img.Dispose();
+                    if (row["Фото"] is Image img)
+                        img.Dispose();
                 }
             }
-
             base.OnFormClosing(e);
         }
 
-        private void DeleteUserFromDatabase(int userId)
-        {
-            using (var connection = new MySqlConnection(Connection.ConnectionString))
-            {
-                try
-                {
-                    connection.Open();
-
-                    // Проверяем, есть ли заказы у этого пользователя
-                    string checkOrdersQuery = "SELECT COUNT(*) FROM `order` WHERE user_id = @UserId";
-                    MySqlCommand checkCmd = new MySqlCommand(checkOrdersQuery, connection);
-                    checkCmd.Parameters.AddWithValue("@UserId", userId);
-                    int orderCount = Convert.ToInt32(checkCmd.ExecuteScalar());
-
-                    if (orderCount > 0)
-                    {
-                        // Получаем имя пользователя для сообщения
-                        string userNameQuery = "SELECT first_name, last_name FROM user WHERE user_id = @UserId";
-                        MySqlCommand nameCmd = new MySqlCommand(userNameQuery, connection);
-                        nameCmd.Parameters.AddWithValue("@UserId", userId);
-
-                        string userName = "";
-                        using (var reader = nameCmd.ExecuteReader())
-                        {
-                            if (reader.Read())
-                            {
-                                string firstName = reader["first_name"]?.ToString() ?? "";
-                                string lastName = reader["last_name"]?.ToString() ?? "";
-                                userName = $"{lastName} {firstName}".Trim();
-                            }
-                        }
-
-                        var confirmResult = MessageBox.Show(
-                            $"Пользователь '{userName}' создал {orderCount} заказ(ов).\n\n" +
-                            "Удалить пользователя и все его заказы?",
-                            "Предупреждение",
-                            MessageBoxButtons.YesNo,
-                            MessageBoxIcon.Warning
-                        );
-
-                        if (confirmResult == DialogResult.No)
-                        {
-                            connection.Close();
-                            return;
-                        }
-
-                        // Удаляем записи из order_product для заказов пользователя
-                        string deleteOrderProductsQuery = @"DELETE op FROM order_product op 
-                                           INNER JOIN `order` o ON op.order_id = o.order_id 
-                                           WHERE o.user_id = @UserId";
-                        MySqlCommand deleteOrderProductsCmd = new MySqlCommand(deleteOrderProductsQuery, connection);
-                        deleteOrderProductsCmd.Parameters.AddWithValue("@UserId", userId);
-                        deleteOrderProductsCmd.ExecuteNonQuery();
-
-                        // Удаляем заказы пользователя
-                        string deleteOrdersQuery = "DELETE FROM `order` WHERE user_id = @UserId";
-                        MySqlCommand deleteOrdersCmd = new MySqlCommand(deleteOrdersQuery, connection);
-                        deleteOrdersCmd.Parameters.AddWithValue("@UserId", userId);
-                        deleteOrdersCmd.ExecuteNonQuery();
-                    }
-
-                    // Удаляем пользователя
-                    string query = "DELETE FROM user WHERE user_id = @UserId";
-                    MySqlCommand cmd = new MySqlCommand(query, connection);
-                    cmd.Parameters.AddWithValue("@UserId", userId);
-
-                    int affectedRows = cmd.ExecuteNonQuery();
-
-                    if (affectedRows > 0)
-                    {
-                        ShowInfo("Пользователь успешно удален");
-                        LoadUsersData(); // Перезагружаем данные
-                    }
-                    else
-                    {
-                        ShowInfo("Пользователь не найден");
-                    }
-
-                    connection.Close();
-                }
-                catch (MySqlException ex)
-                {
-                    // Обработка ошибок внешнего ключа
-                    if (ex.Number == 1451) // Ошибка внешнего ключа (нельзя удалить из-за зависимостей)
-                    {
-                        MessageBox.Show("Нельзя удалить пользователя, так как есть связанные заказы.\n" +
-                                      "Пожалуйста, сначала удалите все заказы пользователя.",
-                                      "Ошибка удаления",
-                                      MessageBoxButtons.OK,
-                                      MessageBoxIcon.Error);
-                    }
-                    else
-                    {
-                        MessageBox.Show($"Ошибка удаления пользователя: {ex.Message}",
-                                      "Ошибка",
-                                      MessageBoxButtons.OK,
-                                      MessageBoxIcon.Error);
-                    }
-                }
-                catch (Exception ex)
-                {
-                    MessageBox.Show($"Ошибка удаления пользователя: {ex.Message}",
-                                  "Ошибка",
-                                  MessageBoxButtons.OK,
-                                  MessageBoxIcon.Error);
-                }
-            }
-        }
+        #endregion
     }
-    
 }

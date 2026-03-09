@@ -13,11 +13,14 @@ namespace ynivermag_bad
         public string name { get; set; }
         public decimal price { get; set; }
         public int stock_quantity { get; set; }
-        public int category_id { get; set; }
+        public int? category_id { get; set; } // ВАЖНО: nullable
+        public string category_name { get; set; }
         public string description { get; set; }
-        public string CategoryName { get; set; }
         public string photo_path { get; set; }
-        public Image ProductImage { get; set; }
+        public bool isActive { get; set; }
 
+        // Для хранения изображения в памяти
+        public Image ProductImage { get; set; }
+        public byte[] PhotoBytes { get; set; }
     }
 }

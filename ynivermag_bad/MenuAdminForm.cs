@@ -13,16 +13,18 @@ namespace ynivermag_bad
     public partial class MenuAdminForm : Form
     {
         private string _fio;
-        public MenuAdminForm(string FIO)
+        private string _login;
+        public MenuAdminForm(string FIO, string login = null)
         {
             InitializeComponent();
             _fio = FIO;
+            _login = login;
             FIOlb.Text = _fio;
         }
 
         private void Lists_Click(object sender, EventArgs e)
         {
-            ShowAll showall = new ShowAll(_fio, 1);
+            ShowAll showall = new ShowAll(_fio, 1, _login);
             showall.Show();
             this.Hide();
         }

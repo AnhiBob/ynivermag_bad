@@ -28,6 +28,7 @@
         /// </summary>
         private void InitializeComponent()
         {
+            this.components = new System.ComponentModel.Container();
             System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(ShowReports));
             this.txtSearch = new System.Windows.Forms.TextBox();
             this.cmbSort = new System.Windows.Forms.ComboBox();
@@ -45,6 +46,7 @@
             this.label5 = new System.Windows.Forms.Label();
             this.lblRecordCount = new System.Windows.Forms.Label();
             this.lblTotalSum = new System.Windows.Forms.Label();
+            this.toolTip1 = new System.Windows.Forms.ToolTip(this.components);
             ((System.ComponentModel.ISupportInitialize)(this.dataGridViewOrders)).BeginInit();
             this.SuspendLayout();
             // 
@@ -55,7 +57,7 @@
             this.txtSearch.Name = "txtSearch";
             this.txtSearch.Size = new System.Drawing.Size(325, 31);
             this.txtSearch.TabIndex = 0;
-            this.txtSearch.TextChanged += new System.EventHandler(this.txtSearch_TextChanged);
+            this.txtSearch.TextChanged += new System.EventHandler(this.TxtSearch_TextChanged);
             // 
             // cmbSort
             // 
@@ -64,6 +66,7 @@
             this.cmbSort.Name = "cmbSort";
             this.cmbSort.Size = new System.Drawing.Size(321, 32);
             this.cmbSort.TabIndex = 1;
+            this.cmbSort.SelectedIndexChanged += new System.EventHandler(this.cmbSort_SelectedIndexChanged);
             this.cmbSort.TextChanged += new System.EventHandler(this.cmbSort_SelectedIndexChanged);
             // 
             // label1
@@ -165,6 +168,7 @@
             this.cmbStatusFilter.Name = "cmbStatusFilter";
             this.cmbStatusFilter.Size = new System.Drawing.Size(282, 32);
             this.cmbStatusFilter.TabIndex = 11;
+            this.cmbStatusFilter.SelectedIndexChanged += new System.EventHandler(this.cmbStatusFilter_SelectedIndexChanged);
             this.cmbStatusFilter.TextChanged += new System.EventHandler(this.cmbStatusFilter_SelectedIndexChanged);
             // 
             // cmbUserFilter
@@ -174,6 +178,7 @@
             this.cmbUserFilter.Name = "cmbUserFilter";
             this.cmbUserFilter.Size = new System.Drawing.Size(282, 32);
             this.cmbUserFilter.TabIndex = 12;
+            this.cmbUserFilter.SelectedIndexChanged += new System.EventHandler(this.cmbUserFilter_SelectedIndexChanged);
             this.cmbUserFilter.TextChanged += new System.EventHandler(this.cmbUserFilter_SelectedIndexChanged);
             // 
             // label5
@@ -226,13 +231,14 @@
             this.Controls.Add(this.cmbSort);
             this.Controls.Add(this.txtSearch);
             this.Font = new System.Drawing.Font("Microsoft Sans Serif", 14.25F);
+            this.FormBorderStyle = System.Windows.Forms.FormBorderStyle.FixedSingle;
             this.Icon = ((System.Drawing.Icon)(resources.GetObject("$this.Icon")));
             this.Margin = new System.Windows.Forms.Padding(6);
             this.MaximizeBox = false;
             this.MinimizeBox = false;
             this.Name = "ShowReports";
             this.StartPosition = System.Windows.Forms.FormStartPosition.CenterScreen;
-            this.Text = "ShowReports";
+            this.Text = "Просмотр Записей";
             ((System.ComponentModel.ISupportInitialize)(this.dataGridViewOrders)).EndInit();
             this.ResumeLayout(false);
             this.PerformLayout();
@@ -257,5 +263,6 @@
         private System.Windows.Forms.DateTimePicker dtpToDate;
         private System.Windows.Forms.Label lblRecordCount;
         private System.Windows.Forms.Label lblTotalSum;
+        private System.Windows.Forms.ToolTip toolTip1;
     }
 }

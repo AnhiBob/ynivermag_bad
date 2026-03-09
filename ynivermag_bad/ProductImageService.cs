@@ -1,10 +1,8 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Drawing;
+using System.Drawing.Drawing2D;
+using System.Drawing.Imaging;
 using System.IO;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using System.Windows.Forms;
 
 namespace ynivermag_bad
@@ -12,20 +10,19 @@ namespace ynivermag_bad
     public class ProductImageService
     {
         private string _productsImagesPath;
-        private string _defaultImagePath;
+        private Image _defaultImage;
+        private static readonly object _lock = new object();
 
         public ProductImageService()
         {
-            InitializeImagePaths();
+            InitializePaths();
         }
 
-        private void InitializeImagePaths()
+        private void InitializePaths()
         {
             try
             {
                 string startupPath = Application.StartupPath;
-
-                // Если запущено из bin\Debug или bin\Release
                 if (startupPath.Contains(@"\bin\Debug") || startupPath.Contains(@"\bin\Release"))
                 {
                     string projectRoot = Directory.GetParent(Directory.GetParent(startupPath).FullName).FullName;
@@ -36,57 +33,14 @@ namespace ynivermag_bad
                     _productsImagesPath = Path.Combine(startupPath, "Images", "Products");
                 }
 
-                _defaultImagePath = Path.Combine(_productsImagesPath, "Default.jpg");
-
-                // Создаем папку если ее нет
                 if (!Directory.Exists(_productsImagesPath))
                 {
                     Directory.CreateDirectory(_productsImagesPath);
                 }
-
-                // Создаем заглушку если ее нет
-                if (!File.Exists(_defaultImagePath))
-                {
-                    CreateDefaultImage();
-                }
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Ошибка инициализации путей: {ex.Message}", "Ошибка",
-                              MessageBoxButtons.OK, MessageBoxIcon.Warning);
-            }
-        }
-
-        private void CreateDefaultImage()
-        {
-            try
-            {
-                Bitmap defaultImage = new Bitmap(200, 200);
-                using (Graphics g = Graphics.FromImage(defaultImage))
-                {
-                    g.Clear(Color.LightGray);
-                    using (Font font = new Font("Arial", 12, FontStyle.Bold))
-                    using (Brush brush = new SolidBrush(Color.DarkGray))
-                    {
-                        string text = "Нет фото";
-                        SizeF textSize = g.MeasureString(text, font);
-                        float x = (defaultImage.Width - textSize.Width) / 2;
-                        float y = (defaultImage.Height - textSize.Height) / 2;
-                        g.DrawString(text, font, brush, x, y);
-                    }
-                }
-
-                if (!Directory.Exists(_productsImagesPath))
-                {
-                    Directory.CreateDirectory(_productsImagesPath);
-                }
-                defaultImage.Save(_defaultImagePath, System.Drawing.Imaging.ImageFormat.Jpeg);
-                defaultImage.Dispose();
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"Ошибка создания заглушки: {ex.Message}", "Ошибка",
-                              MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show($"Ошибка инициализации путей: {ex.Message}");
             }
         }
 
@@ -95,83 +49,69 @@ namespace ynivermag_bad
             return _productsImagesPath;
         }
 
-        public Image LoadImageFromFile(string filePath)
+        // Загрузка изображения с высоким качеством
+        public Image LoadHighQualityImage(string filePath)
         {
             try
             {
-                if (File.Exists(filePath))
-                {
-                    return Image.FromFile(filePath);
-                }
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Ошибка загрузки изображения: {ex.Message}");
-            }
-            return null;
-        }
+                if (!File.Exists(filePath))
+                    return LoadDefaultProductImage();
 
-        public Image LoadDefaultProductImage()
-        {
-            try
-            {
-                if (File.Exists(_defaultImagePath))
+                using (FileStream stream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read))
                 {
-                    return Image.FromFile(_defaultImagePath);
-                }
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Ошибка загрузки заглушки: {ex.Message}");
-            }
+                    Image original = Image.FromStream(stream);
 
-            // Создаем простую заглушку в памяти
-            Bitmap defaultImage = new Bitmap(100, 100);
-            using (Graphics g = Graphics.FromImage(defaultImage))
-            {
-                g.Clear(Color.LightGray);
-                using (Font font = new Font("Arial", 8, FontStyle.Bold))
-                using (Brush brush = new SolidBrush(Color.DarkGray))
-                {
-                    string text = "Нет фото";
-                    SizeF textSize = g.MeasureString(text, font);
-                    float x = (defaultImage.Width - textSize.Width) / 2;
-                    float y = (defaultImage.Height - textSize.Height) / 2;
-                    g.DrawString(text, font, brush, x, y);
-                }
-            }
-            return defaultImage;
-        }
-
-        // НОВЫЙ МЕТОД: Получение миниатюры товара (как GetServiceThumbnail)
-        public Image GetProductThumbnail(string photoFileName, int width, int height)
-        {
-            try
-            {
-                if (string.IsNullOrEmpty(photoFileName))
-                {
-                    return ScaleImageToFit(LoadDefaultProductImage(), width, height);
-                }
-
-                string imagePath = Path.Combine(_productsImagesPath, photoFileName);
-                if (File.Exists(imagePath))
-                {
-                    using (var img = Image.FromFile(imagePath))
+                    // Создаем копию с высоким качеством
+                    Bitmap highQualityCopy = new Bitmap(original.Width, original.Height, PixelFormat.Format32bppArgb);
+                    using (Graphics g = Graphics.FromImage(highQualityCopy))
                     {
-                        return ScaleImageToFit(img, width, height);
+                        g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+                        g.SmoothingMode = SmoothingMode.HighQuality;
+                        g.PixelOffsetMode = PixelOffsetMode.HighQuality;
+                        g.CompositingQuality = CompositingQuality.HighQuality;
+                        g.DrawImage(original, 0, 0, original.Width, original.Height);
                     }
+
+                    original.Dispose();
+                    return highQualityCopy;
                 }
             }
-            catch (Exception ex)
+            catch
             {
-                Console.WriteLine($"Ошибка получения миниатюры: {ex.Message}");
+                return LoadDefaultProductImage();
             }
-
-            return ScaleImageToFit(LoadDefaultProductImage(), width, height);
         }
 
-        // НОВЫЙ МЕТОД: Масштабирование изображения с сохранением пропорций (как в ImageService)
-        public Image ScaleImageToFit(Image image, int maxWidth, int maxHeight)
+        // Улучшенное масштабирование с высоким качеством
+        public Image CreateHighQualityThumbnail(Image image, int width, int height)
+        {
+            if (image == null) return null;
+
+            var destRect = new Rectangle(0, 0, width, height);
+            var destImage = new Bitmap(width, height, PixelFormat.Format32bppArgb);
+
+            destImage.SetResolution(image.HorizontalResolution, image.VerticalResolution);
+
+            using (var graphics = Graphics.FromImage(destImage))
+            {
+                graphics.CompositingMode = CompositingMode.SourceCopy;
+                graphics.CompositingQuality = CompositingQuality.HighQuality;
+                graphics.InterpolationMode = InterpolationMode.HighQualityBicubic;
+                graphics.SmoothingMode = SmoothingMode.HighQuality;
+                graphics.PixelOffsetMode = PixelOffsetMode.HighQuality;
+
+                using (var wrapMode = new ImageAttributes())
+                {
+                    wrapMode.SetWrapMode(WrapMode.TileFlipXY);
+                    graphics.DrawImage(image, destRect, 0, 0, image.Width, image.Height, GraphicsUnit.Pixel, wrapMode);
+                }
+            }
+
+            return destImage;
+        }
+
+        // Масштабирование с сохранением пропорций
+        public Image ScaleImageHighQuality(Image image, int maxWidth, int maxHeight)
         {
             if (image == null) return null;
 
@@ -182,26 +122,135 @@ namespace ynivermag_bad
             var newWidth = (int)(image.Width * ratio);
             var newHeight = (int)(image.Height * ratio);
 
-            var newImage = new Bitmap(newWidth, newHeight);
-            using (var graphics = Graphics.FromImage(newImage))
-            {
-                graphics.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
-                graphics.DrawImage(image, 0, 0, newWidth, newHeight);
-            }
-            return newImage;
+            return CreateHighQualityThumbnail(image, newWidth, newHeight);
         }
 
-        // НОВЫЙ МЕТОД: Расчет оптимального размера миниатюры (как в ImageService)
-        public Size CalculateOptimalThumbnailSize(DataGridView dgv, int defaultHeight)
+        // Загрузка изображения для отображения в DataGridView
+        public Image LoadProductThumbnail(string fileName, int size)
         {
-            if (dgv == null || dgv.RowTemplate == null)
-                return new Size(defaultHeight, defaultHeight);
+            try
+            {
+                if (string.IsNullOrEmpty(fileName))
+                    return CreateDefaultThumbnail(size);
 
-            int rowHeight = dgv.RowTemplate.Height;
-            if (rowHeight <= 0)
-                rowHeight = defaultHeight;
+                string imagePath = Path.Combine(_productsImagesPath, fileName);
 
-            return new Size(rowHeight - 4, rowHeight - 4);
+                if (!File.Exists(imagePath))
+                    return CreateDefaultThumbnail(size);
+
+                // Кэширование для часто используемых изображений
+                string cacheKey = $"{fileName}_{size}";
+
+                // Загружаем оригинал
+                using (FileStream stream = new FileStream(imagePath, FileMode.Open, FileAccess.Read, FileShare.Read))
+                using (Image original = Image.FromStream(stream))
+                {
+                    // Создаем миниатюру с высоким качеством
+                    return CreateHighQualityThumbnail(original, size, size);
+                }
+            }
+            catch
+            {
+                return CreateDefaultThumbnail(size);
+            }
+        }
+
+        public Image CreateDefaultThumbnail(int size)
+        {
+            var bmp = new Bitmap(size, size, PixelFormat.Format32bppArgb);
+            using (Graphics g = Graphics.FromImage(bmp))
+            {
+                g.Clear(Color.FromArgb(240, 240, 240));
+
+                // Рисуем рамку
+                using (Pen pen = new Pen(Color.FromArgb(200, 200, 200)))
+                {
+                    g.DrawRectangle(pen, 1, 1, size - 3, size - 3);
+                }
+
+                // Рисуем иконку фотоаппарата
+                using (Font font = new Font("Segoe UI", size / 4, FontStyle.Regular))
+                using (Brush brush = new SolidBrush(Color.FromArgb(180, 180, 180)))
+                {
+                    string text = "📷";
+                    SizeF textSize = g.MeasureString(text, font);
+                    float x = (size - textSize.Width) / 2;
+                    float y = (size - textSize.Height) / 2;
+
+                    g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAlias;
+                    g.DrawString(text, font, brush, x, y);
+                }
+            }
+            return bmp;
+        }
+
+        public Image LoadDefaultProductImage()
+        {
+            lock (_lock)
+            {
+                if (_defaultImage != null && !_defaultImageIsDisposed())
+                    return _defaultImage;
+
+                try
+                {
+                    string defaultPath = Path.Combine(_productsImagesPath, "Default.jpg");
+                    if (File.Exists(defaultPath))
+                    {
+                        using (FileStream stream = new FileStream(defaultPath, FileMode.Open, FileAccess.Read, FileShare.Read))
+                        {
+                            _defaultImage = Image.FromStream(stream);
+                        }
+                    }
+                    else
+                    {
+                        _defaultImage = CreateDefaultThumbnail(200);
+
+                        // Сохраняем для будущего использования
+                        try
+                        {
+                            _defaultImage.Save(defaultPath, ImageFormat.Jpeg);
+                        }
+                        catch { }
+                    }
+                }
+                catch
+                {
+                    _defaultImage = CreateDefaultThumbnail(200);
+                }
+
+                return _defaultImage;
+            }
+        }
+
+        private bool _defaultImageIsDisposed()
+        {
+            try
+            {
+                return _defaultImage == null || _defaultImage.Width == 0;
+            }
+            catch
+            {
+                return true;
+            }
+        }
+
+
+        public Image LoadImageFromFile(string filePath)
+        {
+            try
+            {
+                if (!File.Exists(filePath))
+                    return LoadDefaultProductImage();
+
+                using (FileStream stream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read))
+                {
+                    return Image.FromStream(stream);
+                }
+            }
+            catch
+            {
+                return LoadDefaultProductImage();
+            }
         }
     }
 }

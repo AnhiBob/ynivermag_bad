@@ -28,6 +28,7 @@
         /// </summary>
         private void InitializeComponent()
         {
+            this.components = new System.ComponentModel.Container();
             System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(Form1));
             this.label1 = new System.Windows.Forms.Label();
             this.label2 = new System.Windows.Forms.Label();
@@ -36,6 +37,7 @@
             this.Password = new System.Windows.Forms.TextBox();
             this.Autorization = new System.Windows.Forms.Button();
             this.Exit = new System.Windows.Forms.Button();
+            this.toolTip1 = new System.Windows.Forms.ToolTip(this.components);
             this.SuspendLayout();
             // 
             // label1
@@ -75,6 +77,8 @@
             this.Login.Name = "Login";
             this.Login.Size = new System.Drawing.Size(307, 31);
             this.Login.TabIndex = 3;
+            this.Login.TextChanged += new System.EventHandler(this.Login_TextChanged);
+            this.Login.KeyPress += new System.Windows.Forms.KeyPressEventHandler(this.Login_KeyPress);
             // 
             // Password
             // 
@@ -83,6 +87,8 @@
             this.Password.Name = "Password";
             this.Password.Size = new System.Drawing.Size(307, 31);
             this.Password.TabIndex = 4;
+            this.Password.TextChanged += new System.EventHandler(this.Password_TextChanged);
+            this.Password.KeyPress += new System.Windows.Forms.KeyPressEventHandler(this.Login_KeyPress);
             // 
             // Autorization
             // 
@@ -122,6 +128,7 @@
             this.Controls.Add(this.label2);
             this.Controls.Add(this.label1);
             this.Font = new System.Drawing.Font("Microsoft Sans Serif", 14.25F);
+            this.FormBorderStyle = System.Windows.Forms.FormBorderStyle.FixedSingle;
             this.Icon = ((System.Drawing.Icon)(resources.GetObject("$this.Icon")));
             this.Margin = new System.Windows.Forms.Padding(6);
             this.MaximizeBox = false;
@@ -143,6 +150,7 @@
         private System.Windows.Forms.TextBox Password;
         private System.Windows.Forms.Button Autorization;
         private System.Windows.Forms.Button Exit;
+        private System.Windows.Forms.ToolTip toolTip1;
     }
 }
 

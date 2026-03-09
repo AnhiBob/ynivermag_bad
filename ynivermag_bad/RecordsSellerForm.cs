@@ -5,7 +5,6 @@ using System.ComponentModel;
 using System.Data;
 using System.Drawing;
 using System.Linq;
-using System.Net;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
@@ -22,9 +21,7 @@ namespace ynivermag_bad
         private int _currentUserId;
         private int _selectedClientId = -1;
         private decimal _totalAmount = 0;
-
-        // Класс для хранения товара в заказе
-        
+        private bool _isUpdatingSearch = false;
 
         public RecordsSellerForm(string FIO, int roleID)
         {
@@ -54,6 +51,13 @@ namespace ynivermag_bad
             dataGridViewOrderProducts.CellEndEdit += DataGridViewOrderProducts_CellEndEdit;
             dataGridViewOrderProducts.CellValidating += DataGridViewOrderProducts_CellValidating;
             dataGridViewOrderProducts.EditingControlShowing += DataGridViewOrderProducts_EditingControlShowing;
+
+            // Фильтрация ввода в поле поиска
+            txtSearch.TextChanged += TxtSearch_TextChanged;
+            txtSearch.KeyPress += TxtSearch_KeyPress;
+
+            // Подсказка для поля поиска
+            toolTip1.SetToolTip(txtSearch, "Поиск по названию товара (буквы, цифры, пробел, дефис)");
         }
 
         private int GetCurrentUserId()
@@ -166,26 +170,78 @@ namespace ynivermag_bad
                 using (var connection = new MySqlConnection(_connection))
                 {
                     connection.Open();
-                    string query = @"SELECT client_id, 
-                                    CONCAT(last_name, ' ', first_name) as FullName 
-                                    FROM client 
-                                    ORDER BY last_name, first_name";
+                    string query = @"SELECT 
+                        client_id, 
+                        last_name,
+                        first_name,
+                        phone
+                        FROM client 
+                        WHERE isActive = 1
+                        ORDER BY last_name, first_name";
 
                     MySqlCommand cmd = new MySqlCommand(query, connection);
                     MySqlDataAdapter adapter = new MySqlDataAdapter(cmd);
                     DataTable dt = new DataTable();
                     adapter.Fill(dt);
 
-                    cmbClient.DataSource = dt;
-                    cmbClient.DisplayMember = "FullName";
+                    // Создаем таблицу для отображения
+                    DataTable displayDt = new DataTable();
+                    displayDt.Columns.Add("client_id", typeof(int));
+                    displayDt.Columns.Add("DisplayName", typeof(string)); // Для отображения в комбобоксе
+
+                    foreach (DataRow row in dt.Rows)
+                    {
+                        string lastName = row["last_name"].ToString();
+                        string firstName = row["first_name"].ToString();
+                        string phone = row["phone"]?.ToString() ?? "";
+
+                        // Формируем ФИО с инициалами и телефоном
+                        string displayName = FormatClientName(lastName, firstName, phone);
+
+                        displayDt.Rows.Add(
+                            Convert.ToInt32(row["client_id"]),
+                            displayName
+                        );
+                    }
+
+                    // Устанавливаем источник данных (простое отображение, без поиска)
+                    cmbClient.DataSource = displayDt;
+                    cmbClient.DisplayMember = "DisplayName";
                     cmbClient.ValueMember = "client_id";
                     cmbClient.SelectedIndex = -1;
+
+                    // Устанавливаем ширину выпадающего списка
+                    cmbClient.DropDownWidth = 350;
+
+                    // Делаем комбобокс недоступным для ввода текста
+                    cmbClient.DropDownStyle = ComboBoxStyle.DropDownList;
                 }
             }
             catch (Exception ex)
             {
                 MessageBox.Show($"Ошибка загрузки клиентов: {ex.Message}");
             }
+        }
+
+        private string FormatClientName(string lastName, string firstName, string phone)
+        {
+            // Формируем инициалы (только первая буква имени)
+            string initials = "";
+            if (!string.IsNullOrEmpty(firstName))
+            {
+                initials = firstName.Substring(0, 1).ToUpper() + ".";
+            }
+
+            // Формируем основную часть
+            string result = $"{lastName} {initials}";
+
+            // Добавляем телефон, если он есть (полностью)
+            if (!string.IsNullOrEmpty(phone))
+            {
+                result += $" ({phone})";
+            }
+
+            return result;
         }
 
         private void LoadAllProducts()
@@ -546,25 +602,87 @@ namespace ynivermag_bad
             }
         }
 
-        // Поиск товаров
-        private void txtSearch_TextChanged(object sender, EventArgs e)
+        // Фильтрация ввода в поле поиска - разрешаем только буквы, цифры, пробел и дефис
+        private void TxtSearch_KeyPress(object sender, KeyPressEventArgs e)
         {
-            string searchText = txtSearch.Text.ToLower();
-            dataGridViewAllProducts.Rows.Clear();
-
-            foreach (DataRow row in _allProductsTable.Rows)
+            // Разрешаем: буквы (русские и английские), цифры, пробел, дефис, backspace
+            if (!char.IsControl(e.KeyChar))
             {
-                string productName = row["name"].ToString().ToLower();
-                if (string.IsNullOrEmpty(searchText) || productName.Contains(searchText))
+                // Проверяем, является ли символ буквой, цифрой, пробелом или дефисом
+                bool isValid = char.IsLetterOrDigit(e.KeyChar) ||
+                               e.KeyChar == ' ' ||
+                               e.KeyChar == '-';
+
+                if (!isValid)
                 {
-                    dataGridViewAllProducts.Rows.Add(
-                        row["product_id"],
-                        row["name"],
-                        Convert.ToDecimal(row["price"]),
-                        Convert.ToInt32(row["stock_quantity"])
-                    );
+                    e.Handled = true;
+
+                    // Показываем подсказку при попытке ввести спецсимвол
+                    TextBox textBox = sender as TextBox;
+                    if (textBox != null)
+                    {
+                        toolTip1.Show("Разрешены только буквы, цифры, пробел и дефис",
+                            textBox, 0, -20, 1500);
+                    }
                 }
             }
+        }
+
+        // Фильтрация ввода в поле поиска (дополнительная проверка при вставке)
+        private void TxtSearch_TextChanged(object sender, EventArgs e)
+        {
+            if (_isUpdatingSearch) return;
+
+            _isUpdatingSearch = true;
+
+            try
+            {
+                TextBox textBox = sender as TextBox;
+                if (textBox != null)
+                {
+                    int selectionStart = textBox.SelectionStart;
+                    string filteredText = FilterSearchText(textBox.Text);
+
+                    if (filteredText != textBox.Text)
+                    {
+                        textBox.Text = filteredText;
+                        textBox.SelectionStart = Math.Min(selectionStart, filteredText.Length);
+                    }
+                }
+
+                // Выполняем поиск с отфильтрованным текстом
+                string searchText = txtSearch.Text.ToLower();
+                dataGridViewAllProducts.Rows.Clear();
+
+                foreach (DataRow row in _allProductsTable.Rows)
+                {
+                    string productName = row["name"].ToString().ToLower();
+                    if (string.IsNullOrEmpty(searchText) || productName.Contains(searchText))
+                    {
+                        dataGridViewAllProducts.Rows.Add(
+                            row["product_id"],
+                            row["name"],
+                            Convert.ToDecimal(row["price"]),
+                            Convert.ToInt32(row["stock_quantity"])
+                        );
+                    }
+                }
+            }
+            finally
+            {
+                _isUpdatingSearch = false;
+            }
+        }
+
+        // Фильтр для текста поиска - оставляем только буквы, цифры, пробел и дефис
+        private string FilterSearchText(string input)
+        {
+            if (string.IsNullOrEmpty(input)) return input;
+
+            return new string(input.Where(c =>
+                char.IsLetterOrDigit(c) ||  // Буквы и цифры
+                c == ' ' ||                  // Пробел
+                c == '-').ToArray());        // Дефис
         }
 
         // Кнопка добавления нового клиента
@@ -660,6 +778,25 @@ namespace ynivermag_bad
                         }
                     }
                     UpdateTotalAmount();
+                }
+            }
+        }
+
+        private void button7_Click(object sender, EventArgs e)
+        {
+            using (SearchClient searchForm = new SearchClient())
+            {
+                if (searchForm.ShowDialog() == DialogResult.OK)
+                {
+                    // Ищем клиента в списке комбобокса по ID
+                    foreach (DataRowView item in cmbClient.Items)
+                    {
+                        if (Convert.ToInt32(item["client_id"]) == searchForm.SelectedClientId)
+                        {
+                            cmbClient.SelectedItem = item;
+                            break;
+                        }
+                    }
                 }
             }
         }

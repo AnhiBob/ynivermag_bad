@@ -4,12 +4,11 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.Data;
 using System.Drawing;
+using System.Drawing.Imaging;
 using System.IO;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+using System.Text.RegularExpressions;
 using System.Windows.Forms;
-using static System.Windows.Forms.VisualStyles.VisualStyleElement;
 
 namespace ynivermag_bad
 {
@@ -21,25 +20,42 @@ namespace ynivermag_bad
         private string _productsImagesPath;
         private string _defaultImagePath;
         private bool _imageChanged = false;
+        private bool _isUpdatingPrice = false;
+        private ProductImageService _productImageService;
 
-        // Константа для ограничения размера файла (3 МБ в байтах)
+        // Константы
         private const long MAX_IMAGE_SIZE = 3 * 1024 * 1024; // 3 МБ
+        private const int MAX_NAME_LENGTH = 100;
+        private const int MIN_NAME_LENGTH = 2;
+        private const int MAX_PRICE = 1000000;
+        private const int MAX_QUANTITY = 999999;
 
         public EditProductForm(ProductModel product)
         {
             InitializeComponent();
             _connection = Connection.ConnectionString;
             Product = product;
+            _productImageService = new ProductImageService();
 
-            // Инициализация путей для изображений
             InitializeImagePaths();
-
             LoadProductData();
             LoadCategories();
             LoadProductImage();
 
-            // Настройка PictureBox для приема перетаскивания
             pictureBoxProduct.AllowDrop = true;
+
+            // Подписываемся на события для фильтрации ввода
+            SubscribeToEvents();
+        }
+
+        #region Инициализация
+
+        private void SubscribeToEvents()
+        {
+            NameTB.TextChanged += NameTB_TextChanged;
+            Price.TextChanged += Price_TextChanged;
+            Count.TextChanged += Count_TextChanged;
+            NameTB.Validating += NameTB_Validating;
         }
 
         private void InitializeImagePaths()
@@ -48,7 +64,6 @@ namespace ynivermag_bad
             {
                 string startupPath = Application.StartupPath;
 
-                // Если запущено из bin\Debug или bin\Release
                 if (startupPath.Contains(@"\bin\Debug") || startupPath.Contains(@"\bin\Release"))
                 {
                     string projectRoot = Directory.GetParent(Directory.GetParent(startupPath).FullName).FullName;
@@ -61,7 +76,6 @@ namespace ynivermag_bad
 
                 _defaultImagePath = Path.Combine(_productsImagesPath, "Default.jpg");
 
-                // Создаем папку если ее нет
                 if (!Directory.Exists(_productsImagesPath))
                 {
                     Directory.CreateDirectory(_productsImagesPath);
@@ -73,6 +87,249 @@ namespace ynivermag_bad
                               MessageBoxButtons.OK, MessageBoxIcon.Warning);
             }
         }
+
+        #endregion
+
+        #region Загрузка данных
+
+        private void LoadProductData()
+        {
+            _isUpdatingPrice = true;
+
+            NameTB.Text = Product.name;
+            Price.Text = Product.price.ToString("F2");
+            Count.Text = Product.stock_quantity.ToString();
+
+            _isUpdatingPrice = false;
+        }
+
+        private void LoadCategories()
+        {
+            try
+            {
+                using (var connection = new MySqlConnection(_connection))
+                {
+                    connection.Open();
+                    string query = "SELECT category_id, name FROM category WHERE isActive = 1 ORDER BY name";
+                    MySqlDataAdapter adapter = new MySqlDataAdapter(query, connection);
+                    DataTable dt = new DataTable();
+                    adapter.Fill(dt);
+
+                    // Добавляем пустую строку для возможности не выбирать категорию
+                    DataRow emptyRow = dt.NewRow();
+                    emptyRow["category_id"] = DBNull.Value;
+                    emptyRow["name"] = "— Без категории —";
+                    dt.Rows.InsertAt(emptyRow, 0);
+
+                    CategoryCb.DataSource = dt;
+                    CategoryCb.DisplayMember = "name";
+                    CategoryCb.ValueMember = "category_id";
+
+                    // Устанавливаем текущую категорию с проверкой на null
+                    if (Product.category_id.HasValue)
+                    {
+                        bool found = false;
+                        for (int i = 0; i < CategoryCb.Items.Count; i++)
+                        {
+                            DataRowView row = (DataRowView)CategoryCb.Items[i];
+                            if (row["category_id"] != DBNull.Value &&
+                                Convert.ToInt32(row["category_id"]) == Product.category_id.Value)
+                            {
+                                CategoryCb.SelectedIndex = i;
+                                found = true;
+                                break;
+                            }
+                        }
+
+                        if (!found)
+                        {
+                            CategoryCb.SelectedIndex = 0;
+                        }
+                    }
+                    else
+                    {
+                        CategoryCb.SelectedIndex = 0;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Ошибка загрузки категорий: {ex.Message}", "Ошибка",
+                              MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        #endregion
+
+        #region Фильтрация ввода (как в примере)
+
+        /// <summary>
+        /// Фильтрация ввода в поле названия (только разрешенные символы)
+        /// </summary>
+        private void NameTB_TextChanged(object sender, EventArgs e)
+        {
+            int selectionStart = NameTB.SelectionStart;
+            string filteredText = FilterToProductName(NameTB.Text);
+
+            if (filteredText != NameTB.Text)
+            {
+                NameTB.Text = filteredText;
+                NameTB.SelectionStart = Math.Min(selectionStart, NameTB.Text.Length);
+            }
+        }
+
+        /// <summary>
+        /// Фильтр для названия товара: буквы (русские/английские), цифры, пробел, дефис, скобки
+        /// </summary>
+        private string FilterToProductName(string input)
+        {
+            if (string.IsNullOrEmpty(input)) return input;
+
+            // Разрешаем: буквы (любые), цифры, пробел, дефис, скобки
+            char[] allowedChars = { ' ', '-', '(', ')' };
+
+            return new string(input.Where(c =>
+                char.IsLetter(c) ||      // Любые буквы
+                char.IsDigit(c) ||       // Цифры
+                allowedChars.Contains(c) // Разрешенные спецсимволы
+            ).ToArray());
+        }
+
+        /// <summary>
+        /// Фильтрация ввода в поле цены (только цифры, точка)
+        /// </summary>
+        private void Price_TextChanged(object sender, EventArgs e)
+        {
+            if (_isUpdatingPrice) return;
+
+            _isUpdatingPrice = true;
+
+            try
+            {
+                int cursorPosition = Price.SelectionStart;
+                int oldLength = Price.Text.Length;
+                string text = Price.Text;
+
+                if (string.IsNullOrEmpty(text))
+                {
+                    _isUpdatingPrice = false;
+                    return;
+                }
+
+                // Фильтруем: оставляем только цифры и точку
+                string filteredText = new string(text.Where(c => char.IsDigit(c) || c == '.').ToArray());
+
+                // Заменяем возможные запятые на точку
+                filteredText = filteredText.Replace(',', '.');
+
+                // Проверяем, что точка только одна
+                int dotCount = filteredText.Count(c => c == '.');
+                if (dotCount > 1)
+                {
+                    // Оставляем только первую точку
+                    int firstDotIndex = filteredText.IndexOf('.');
+                    filteredText = filteredText.Substring(0, firstDotIndex + 1) +
+                                  filteredText.Substring(firstDotIndex + 1).Replace(".", "");
+                }
+
+                // Если есть точка, проверяем количество знаков после запятой
+                if (filteredText.Contains('.'))
+                {
+                    int dotIndex = filteredText.IndexOf('.');
+                    string beforeDot = filteredText.Substring(0, dotIndex);
+                    string afterDot = filteredText.Substring(dotIndex + 1);
+
+                    // Ограничиваем количество цифр после точки до 2
+                    if (afterDot.Length > 2)
+                    {
+                        afterDot = afterDot.Substring(0, 2);
+                        filteredText = beforeDot + "." + afterDot;
+                    }
+
+                    // Ограничиваем количество цифр до точки до 6
+                    if (beforeDot.Length > 6)
+                    {
+                        beforeDot = beforeDot.Substring(0, 6);
+                        filteredText = beforeDot + "." + afterDot;
+                    }
+                }
+                else
+                {
+                    // Если нет точки, ограничиваем длину целой части
+                    if (filteredText.Length > 6)
+                    {
+                        filteredText = filteredText.Substring(0, 6);
+                    }
+                }
+
+                // Проверяем, что число не начинается с нуля (если есть другие цифры)
+                if (filteredText.Length > 1 && filteredText[0] == '0' && filteredText[1] != '.')
+                {
+                    filteredText = filteredText.Substring(1);
+                }
+
+                // Если строка состоит только из точки - делаем "0."
+                if (filteredText == ".")
+                {
+                    filteredText = "0.";
+                }
+
+                // Если текст изменился, обновляем поле
+                if (filteredText != text)
+                {
+                    Price.Text = filteredText;
+
+                    // Корректируем позицию курсора
+                    int newLength = Price.Text.Length;
+                    if (cursorPosition > newLength)
+                    {
+                        cursorPosition = newLength;
+                    }
+                    else if (cursorPosition > 0 && cursorPosition <= newLength)
+                    {
+                        if (oldLength > newLength)
+                        {
+                            cursorPosition = Math.Max(0, cursorPosition - 1);
+                        }
+                    }
+
+                    Price.SelectionStart = cursorPosition;
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Ошибка в Price_TextChanged: {ex.Message}");
+            }
+            finally
+            {
+                _isUpdatingPrice = false;
+            }
+        }
+
+        /// <summary>
+        /// Фильтрация ввода в поле количества (только цифры)
+        /// </summary>
+        private void Count_TextChanged(object sender, EventArgs e)
+        {
+            int selectionStart = Count.SelectionStart;
+            string filteredText = new string(Count.Text.Where(char.IsDigit).ToArray());
+
+            // Ограничиваем до 6 цифр
+            if (filteredText.Length > 6)
+            {
+                filteredText = filteredText.Substring(0, 6);
+            }
+
+            if (filteredText != Count.Text)
+            {
+                Count.Text = filteredText;
+                Count.SelectionStart = Math.Min(selectionStart, Count.Text.Length);
+            }
+        }
+
+        #endregion
+
+        #region Работа с изображением
 
         private void LoadProductImage()
         {
@@ -87,22 +344,13 @@ namespace ynivermag_bad
                         _selectedImage = LoadImageWithoutLock(imagePath);
                         if (_selectedImage != null)
                         {
-                            pictureBoxProduct.Image = ScaleImage(_selectedImage, pictureBoxProduct.Width, pictureBoxProduct.Height);
-                        }
-                        else
-                        {
-                            LoadDefaultImage();
+                            SetPictureBoxImage(_selectedImage);
+                            return;
                         }
                     }
-                    else
-                    {
-                        LoadDefaultImage();
-                    }
                 }
-                else
-                {
-                    LoadDefaultImage();
-                }
+
+                LoadDefaultImage();
             }
             catch (Exception ex)
             {
@@ -115,48 +363,29 @@ namespace ynivermag_bad
         {
             try
             {
-                // Освобождаем предыдущее изображение
-                if (_selectedImage != null)
-                {
-                    _selectedImage.Dispose();
-                    _selectedImage = null;
-                }
+                ReleaseImageResources();
 
                 if (File.Exists(_defaultImagePath))
                 {
-                    using (FileStream stream = new FileStream(_defaultImagePath, FileMode.Open, FileAccess.Read))
-                    {
-                        _selectedImage = Image.FromStream(stream);
-                    }
+                    _selectedImage = LoadImageWithoutLock(_defaultImagePath);
                 }
-                else
+
+                if (_selectedImage == null)
                 {
-                    // Создаем заглушку
-                    Bitmap defaultImage = new Bitmap(pictureBoxProduct.Width, pictureBoxProduct.Height);
-                    using (Graphics g = Graphics.FromImage(defaultImage))
-                    {
-                        g.Clear(Color.LightGray);
-                        using (Font font = new Font("Arial", 12, FontStyle.Bold))
-                        using (Brush brush = new SolidBrush(Color.DarkGray))
-                        {
-                            string text = "Изображение товара";
-                            SizeF textSize = g.MeasureString(text, font);
-                            float x = (defaultImage.Width - textSize.Width) / 2;
-                            float y = (defaultImage.Height - textSize.Height) / 2;
-                            g.DrawString(text, font, brush, x, y);
-                        }
-                    }
-                    _selectedImage = defaultImage;
+                    _selectedImage = CreatePlaceholderImage(300, 300);
 
-                    // Сохраняем заглушку
-                    if (!Directory.Exists(_productsImagesPath))
+                    try
                     {
-                        Directory.CreateDirectory(_productsImagesPath);
+                        if (!Directory.Exists(_productsImagesPath))
+                        {
+                            Directory.CreateDirectory(_productsImagesPath);
+                        }
+                        _selectedImage.Save(_defaultImagePath, ImageFormat.Jpeg);
                     }
-                    defaultImage.Save(_defaultImagePath, System.Drawing.Imaging.ImageFormat.Jpeg);
+                    catch { }
                 }
 
-                pictureBoxProduct.Image = ScaleImage(_selectedImage, pictureBoxProduct.Width, pictureBoxProduct.Height);
+                SetPictureBoxImage(_selectedImage);
             }
             catch (Exception ex)
             {
@@ -164,115 +393,6 @@ namespace ynivermag_bad
             }
         }
 
-        private Image ScaleImage(Image image, int maxWidth, int maxHeight)
-        {
-            var ratioX = (double)maxWidth / image.Width;
-            var ratioY = (double)maxHeight / image.Height;
-            var ratio = Math.Min(ratioX, ratioY);
-
-            var newWidth = (int)(image.Width * ratio);
-            var newHeight = (int)(image.Height * ratio);
-
-            var newImage = new Bitmap(newWidth, newHeight);
-            using (var graphics = Graphics.FromImage(newImage))
-            {
-                graphics.DrawImage(image, 0, 0, newWidth, newHeight);
-            }
-            return newImage;
-        }
-
-        private void LoadProductData()
-        {
-            NameTB.Text = Product.name;
-            Price.Text = Product.price.ToString();
-            Count.Text = Product.stock_quantity.ToString();
-        }
-
-        private void LoadCategories()
-        {
-            try
-            {
-                using (var connection = new MySqlConnection(_connection))
-                {
-                    connection.Open();
-                    string query = "SELECT category_id, name FROM category ORDER BY name";
-                    MySqlCommand cmd = new MySqlCommand(query, connection);
-                    MySqlDataAdapter adapter = new MySqlDataAdapter(cmd);
-                    DataTable dt = new DataTable();
-                    adapter.Fill(dt);
-
-                    CategoryCb.DataSource = dt;
-                    CategoryCb.DisplayMember = "name";
-                    CategoryCb.ValueMember = "category_id";
-
-                    // Устанавливаем текущую категорию
-                    if (CategoryCb.Items.Count > 0 && Product.category_id > 0)
-                    {
-                        for (int i = 0; i < CategoryCb.Items.Count; i++)
-                        {
-                            DataRowView row = (DataRowView)CategoryCb.Items[i];
-                            if (Convert.ToInt32(row["category_id"]) == Product.category_id)
-                            {
-                                CategoryCb.SelectedIndex = i;
-                                break;
-                            }
-                        }
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"Ошибка загрузки категорий: {ex.Message}", "Ошибка",
-                              MessageBoxButtons.OK, MessageBoxIcon.Error);
-            }
-        }
-
-        private void Back_Click(object sender, EventArgs e)
-        {
-            DialogResult = DialogResult.Cancel;
-            Close();
-        }
-
-        private void EditProduct_Click(object sender, EventArgs e)
-        {
-            if (ValidateData())
-            {
-                SaveProductData();
-
-                // Сохраняем изображение
-                if (_imageChanged)
-                {
-                    // Освобождаем ресурсы перед сохранением
-                    ReleaseImageResources();
-
-                    string imageFileName = SaveProductImage();
-                    if (!string.IsNullOrEmpty(imageFileName))
-                    {
-                        Product.photo_path = imageFileName;
-                    }
-                    else if (_selectedImage == null || IsDefaultImage())
-                    {
-                        // Если изображение удалено, устанавливаем null
-                        Product.photo_path = null;
-                    }
-                }
-
-                // СОХРАНЯЕМ ИЗМЕНЕНИЯ В БАЗЕ ДАННЫХ
-                EditClass editClass = new EditClass();
-                bool updated = editClass.UpdateProductInDatabase(Product);
-
-                if (updated)
-                {
-                    DialogResult = DialogResult.OK;
-                    Close();
-                }
-                else
-                {
-                    MessageBox.Show("Не удалось сохранить изменения в базе данных", "Ошибка",
-                        MessageBoxButtons.OK, MessageBoxIcon.Error);
-                }
-            }
-        }
         private Image LoadImageWithoutLock(string filePath)
         {
             try
@@ -285,72 +405,264 @@ namespace ynivermag_bad
                     return Image.FromStream(stream);
                 }
             }
-            catch (Exception ex)
+            catch
             {
-                Console.WriteLine($"Ошибка загрузки изображения: {ex.Message}");
                 return null;
             }
         }
 
-        private bool ValidateData()
+        private Image CreatePlaceholderImage(int width, int height)
         {
-            // Проверка названия
-            if (string.IsNullOrWhiteSpace(NameTB.Text))
+            Bitmap bmp = new Bitmap(width, height);
+            using (Graphics g = Graphics.FromImage(bmp))
             {
-                MessageBox.Show("Введите название продукта", "Ошибка",
-                    MessageBoxButtons.OK, MessageBoxIcon.Error);
-                NameTB.Focus();
-                return false;
+                g.Clear(Color.FromArgb(240, 240, 240));
+                using (Pen pen = new Pen(Color.FromArgb(200, 200, 200)))
+                {
+                    g.DrawRectangle(pen, 1, 1, width - 3, height - 3);
+                }
+                using (Font font = new Font("Arial", 12, FontStyle.Regular))
+                using (Brush brush = new SolidBrush(Color.FromArgb(150, 150, 150)))
+                {
+                    string text = "Нет фото";
+                    SizeF textSize = g.MeasureString(text, font);
+                    float x = (width - textSize.Width) / 2;
+                    float y = (height - textSize.Height) / 2;
+                    g.DrawString(text, font, brush, x, y);
+                }
+            }
+            return bmp;
+        }
+
+        private void SetPictureBoxImage(Image image)
+        {
+            if (image == null) return;
+
+            if (pictureBoxProduct.Image != null)
+            {
+                Image oldImage = pictureBoxProduct.Image;
+                pictureBoxProduct.Image = null;
+                if (oldImage != _selectedImage)
+                {
+                    oldImage.Dispose();
+                }
             }
 
-            // Проверка цены
-            if (string.IsNullOrWhiteSpace(Price.Text))
+            if (pictureBoxProduct.Width > 0 && pictureBoxProduct.Height > 0)
             {
-                MessageBox.Show("Введите цену продукта", "Ошибка",
-                    MessageBoxButtons.OK, MessageBoxIcon.Error);
-                Price.Focus();
-                return false;
+                pictureBoxProduct.Image = ScaleImage(image, pictureBoxProduct.Width, pictureBoxProduct.Height);
+            }
+            else
+            {
+                pictureBoxProduct.Image = new Bitmap(image);
+            }
+        }
+
+        private Image ScaleImage(Image image, int maxWidth, int maxHeight)
+        {
+            if (image == null) return null;
+
+            var ratioX = (double)maxWidth / image.Width;
+            var ratioY = (double)maxHeight / image.Height;
+            var ratio = Math.Min(ratioX, ratioY);
+
+            if (ratio > 1) ratio = 1;
+
+            var newWidth = (int)(image.Width * ratio);
+            var newHeight = (int)(image.Height * ratio);
+
+            var newImage = new Bitmap(newWidth, newHeight);
+            using (var graphics = Graphics.FromImage(newImage))
+            {
+                graphics.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
+                graphics.DrawImage(image, 0, 0, newWidth, newHeight);
+            }
+            return newImage;
+        }
+
+        private void ReleaseImageResources()
+        {
+            if (pictureBoxProduct.Image != null)
+            {
+                Image oldImage = pictureBoxProduct.Image;
+                pictureBoxProduct.Image = null;
+                oldImage.Dispose();
             }
 
-           
-
-            // Проверка количества
-            if (string.IsNullOrWhiteSpace(Count.Text))
+            if (_selectedImage != null && _selectedImage != pictureBoxProduct.Image)
             {
-                MessageBox.Show("Введите количество продукта", "Ошибка",
-                    MessageBoxButtons.OK, MessageBoxIcon.Error);
-                Count.Focus();
-                return false;
+                _selectedImage.Dispose();
+                _selectedImage = null;
             }
 
-            if (!int.TryParse(Count.Text, out int stock) || stock < 0)
+            GC.Collect();
+            GC.WaitForPendingFinalizers();
+        }
+
+        private bool IsDefaultImage()
+        {
+            try
             {
-                MessageBox.Show("Количество должно быть неотрицательным целым числом", "Ошибка",
-                    MessageBoxButtons.OK, MessageBoxIcon.Error);
-                Count.Focus();
-                Count.SelectAll();
+                if (_selectedImage == null)
+                    return true;
+
+                if (!string.IsNullOrEmpty(Product.photo_path))
+                {
+                    return Product.photo_path == "Default.jpg";
+                }
+
                 return false;
             }
-
-            // Проверка категории
-            if (CategoryCb.SelectedValue == null)
+            catch
             {
-                MessageBox.Show("Выберите категорию", "Ошибка",
-                    MessageBoxButtons.OK, MessageBoxIcon.Error);
-                CategoryCb.Focus();
-                return false;
+                return true;
+            }
+        }
+
+        private string SaveProductImage()
+        {
+            try
+            {
+                if (_selectedImage == null || IsDefaultImage())
+                {
+                    DeleteOldProductImage();
+                    return null;
+                }
+
+                string fileName = GenerateImageFileName();
+                string filePath = Path.Combine(_productsImagesPath, fileName);
+
+                DeleteOldProductImage();
+
+                bool saved = SaveOptimizedImage(_selectedImage, filePath);
+
+                return saved ? fileName : Product.photo_path;
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Не удалось сохранить изображение: {ex.Message}", "Ошибка",
+                              MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return Product.photo_path;
+            }
+        }
+
+        private string GenerateImageFileName()
+        {
+            string productName = NameTB.Text.Trim().ToLower()
+                .Replace(" ", "_")
+                .Replace("/", "_")
+                .Replace("\\", "_")
+                .Replace(":", "")
+                .Replace("*", "")
+                .Replace("?", "")
+                .Replace("\"", "")
+                .Replace("<", "")
+                .Replace(">", "")
+                .Replace("|", "");
+
+            if (productName.Length > 50)
+            {
+                productName = productName.Substring(0, 50);
             }
 
-            // Проверка на уникальность названия продукта
-            if (!IsProductNameUnique())
+            return $"product_{productName}_{DateTime.Now:yyyyMMdd_HHmmss}.jpg";
+        }
+
+        private void DeleteOldProductImage()
+        {
+            try
             {
-                MessageBox.Show("Продукт с таким названием уже существует",
-                    "Ошибка", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                NameTB.Focus();
+                if (!string.IsNullOrEmpty(Product.photo_path) &&
+                    Product.photo_path != "Default.jpg")
+                {
+                    string oldFilePath = Path.Combine(_productsImagesPath, Product.photo_path);
+                    if (File.Exists(oldFilePath))
+                    {
+                        GC.Collect();
+                        GC.WaitForPendingFinalizers();
+
+                        try
+                        {
+                            File.Delete(oldFilePath);
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.WriteLine($"Не удалось удалить старый файл: {ex.Message}");
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Ошибка при удалении старого изображения: {ex.Message}");
+            }
+        }
+
+        private bool SaveOptimizedImage(Image image, string filePath)
+        {
+            try
+            {
+                int maxDimension = 1200;
+                Image imageToSave = image;
+
+                if (image.Width > maxDimension || image.Height > maxDimension)
+                {
+                    imageToSave = _productImageService.ScaleImageHighQuality(image, maxDimension, maxDimension);
+                }
+
+                var encoder = ImageCodecInfo.GetImageEncoders()
+                    .FirstOrDefault(c => c.FormatID == ImageFormat.Jpeg.Guid);
+
+                if (encoder != null)
+                {
+                    var encoderParams = new EncoderParameters(1);
+                    encoderParams.Param[0] = new EncoderParameter(Encoder.Quality, 95L);
+                    imageToSave.Save(filePath, encoder, encoderParams);
+                }
+                else
+                {
+                    imageToSave.Save(filePath, ImageFormat.Jpeg);
+                }
+
+                if (imageToSave != image)
+                {
+                    imageToSave.Dispose();
+                }
+
+                return true;
+            }
+            catch
+            {
                 return false;
             }
+        }
 
-            return true;
+        #endregion
+
+        #region Валидация перед сохранением
+
+        private bool ValidatePrice(string priceText, out decimal price)
+        {
+            price = 0;
+
+            if (string.IsNullOrWhiteSpace(priceText)) return false;
+
+            bool parsed = decimal.TryParse(priceText.Replace(',', '.'),
+                System.Globalization.NumberStyles.Any,
+                System.Globalization.CultureInfo.InvariantCulture,
+                out price);
+
+            return parsed && price >= 0 && price <= MAX_PRICE;
+        }
+
+        private bool ValidateQuantity(string quantityText, out int quantity)
+        {
+            quantity = 0;
+
+            if (string.IsNullOrWhiteSpace(quantityText)) return false;
+
+            return int.TryParse(quantityText, out quantity) &&
+                   quantity >= 0 && quantity <= MAX_QUANTITY;
         }
 
         private bool IsProductNameUnique()
@@ -378,211 +690,187 @@ namespace ynivermag_bad
             }
         }
 
+        private bool ValidateData()
+        {
+            List<string> errors = new List<string>();
+
+            // Проверка названия
+            if (string.IsNullOrWhiteSpace(NameTB.Text))
+            {
+                errors.Add("Введите название продукта");
+                NameTB.BackColor = Color.LightPink;
+            }
+            else if (NameTB.Text.Length < MIN_NAME_LENGTH)
+            {
+                errors.Add($"Название должно содержать минимум {MIN_NAME_LENGTH} символа");
+                NameTB.BackColor = Color.LightPink;
+            }
+            else if (NameTB.Text.Length > MAX_NAME_LENGTH)
+            {
+                errors.Add($"Название должно содержать не более {MAX_NAME_LENGTH} символов");
+                NameTB.BackColor = Color.LightPink;
+            }
+
+            // Проверка цены
+            decimal price;
+            if (string.IsNullOrWhiteSpace(Price.Text))
+            {
+                errors.Add("Введите цену продукта");
+                Price.BackColor = Color.LightPink;
+            }
+            else if (!ValidatePrice(Price.Text, out price))
+            {
+                errors.Add($"Цена должна быть числом от 0 до {MAX_PRICE:N0}");
+                Price.BackColor = Color.LightPink;
+            }
+
+            // Проверка количества
+            int quantity;
+            if (string.IsNullOrWhiteSpace(Count.Text))
+            {
+                errors.Add("Введите количество продукта");
+                Count.BackColor = Color.LightPink;
+            }
+            else if (!ValidateQuantity(Count.Text, out quantity))
+            {
+                errors.Add($"Количество должно быть целым числом от 0 до {MAX_QUANTITY}");
+                Count.BackColor = Color.LightPink;
+            }
+
+            // Проверка категории
+            if (CategoryCb.SelectedValue == null || CategoryCb.SelectedValue == DBNull.Value)
+            {
+                errors.Add("Выберите категорию");
+                CategoryCb.BackColor = Color.LightPink;
+            }
+
+            // Проверка на уникальность названия
+            if (!string.IsNullOrWhiteSpace(NameTB.Text) && !IsProductNameUnique())
+            {
+                errors.Add("Продукт с таким названием уже существует");
+                NameTB.BackColor = Color.LightPink;
+            }
+
+            // Проверка изображения (предупреждение, не ошибка)
+            if (_selectedImage == null || IsDefaultImage())
+            {
+                var result = MessageBox.Show("У товара нет изображения. Продолжить сохранение?",
+                    "Предупреждение", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+                if (result == DialogResult.No)
+                {
+                    return false;
+                }
+            }
+
+            if (errors.Count > 0)
+            {
+                string errorMessage = "Пожалуйста, исправьте следующие ошибки:\n\n• " +
+                                     string.Join("\n• ", errors);
+                MessageBox.Show(errorMessage, "Ошибки валидации",
+                              MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return false;
+            }
+
+            return true;
+        }
+
+        #endregion
+
+        #region Сохранение данных
+
         private void SaveProductData()
         {
-            decimal.TryParse(Price.Text, out decimal price);
-            int.TryParse(Count.Text, out int stock);
+            ValidatePrice(Price.Text, out decimal price);
+            ValidateQuantity(Count.Text, out int stock);
 
             Product.name = NameTB.Text.Trim();
             Product.price = price;
             Product.stock_quantity = stock;
 
-            if (CategoryCb.SelectedValue != null)
+            if (CategoryCb.SelectedValue != null && CategoryCb.SelectedValue != DBNull.Value)
             {
-                Product.category_id = (int)CategoryCb.SelectedValue;
+                Product.category_id = Convert.ToInt32(CategoryCb.SelectedValue);
+            }
+            else
+            {
+                Product.category_id = null;
             }
         }
 
-        private string SaveProductImage()
+        #endregion
+
+        #region Обработчики событий
+
+        private void EditProduct_Click(object sender, EventArgs e)
         {
-            try
+            if (!ValidateData()) return;
+
+            SaveProductData();
+
+            if (_imageChanged)
             {
-                if (_selectedImage == null || IsDefaultImage())
+                string imageFileName = SaveProductImage();
+                if (!string.IsNullOrEmpty(imageFileName))
                 {
-                    // Если выбрана заглушка, удаляем старое фото
-                    if (!string.IsNullOrEmpty(Product.photo_path))
-                    {
-                        string oldFilePath = Path.Combine(_productsImagesPath, Product.photo_path);
-                        if (File.Exists(oldFilePath) && !IsDefaultImageFile(oldFilePath))
-                        {
-                            // Снимаем все блокировки с файла
-                            GC.Collect();
-                            GC.WaitForPendingFinalizers();
-
-                            try
-                            {
-                                File.Delete(oldFilePath);
-                            }
-                            catch (Exception ex)
-                            {
-                                Console.WriteLine($"Не удалось удалить старый файл: {ex.Message}");
-                            }
-                        }
-                    }
-                    return null;
-                }
-
-                // Генерируем уникальное имя файла
-                string productName = NameTB.Text.Trim().ToLower()
-                    .Replace(" ", "_")
-                    .Replace("/", "_")
-                    .Replace("\\", "_")
-                    .Replace(":", "")
-                    .Replace("*", "")
-                    .Replace("?", "")
-                    .Replace("\"", "")
-                    .Replace("<", "")
-                    .Replace(">", "")
-                    .Replace("|", "");
-
-                // Обрезаем, если слишком длинное имя
-                if (productName.Length > 50)
-                {
-                    productName = productName.Substring(0, 50);
-                }
-
-                string fileName = $"product_{productName}_{DateTime.Now:yyyyMMdd_HHmmss}.jpg";
-                string filePath = Path.Combine(_productsImagesPath, fileName);
-
-                // Удаляем старое изображение если оно существует и это не заглушка
-                if (!string.IsNullOrEmpty(Product.photo_path) && Product.photo_path != fileName)
-                {
-                    string oldFilePath = Path.Combine(_productsImagesPath, Product.photo_path);
-                    if (File.Exists(oldFilePath) && !IsDefaultImageFile(oldFilePath))
-                    {
-                        // Снимаем все блокировки
-                        GC.Collect();
-                        GC.WaitForPendingFinalizers();
-
-                        try
-                        {
-                            File.Delete(oldFilePath);
-                        }
-                        catch (Exception ex)
-                        {
-                            Console.WriteLine($"Не удалось удалить старый файл: {ex.Message}");
-                        }
-                    }
-                }
-
-                // Сохраняем новое изображение с оптимизацией
-                bool saved = SaveOptimizedImage(_selectedImage, filePath);
-
-                if (saved)
-                {
-                    return fileName;
+                    Product.photo_path = imageFileName;
+                    _imageChanged = false;
                 }
                 else
                 {
-                    return Product.photo_path; // Возвращаем старое имя файла в случае ошибки
+                    Product.photo_path = null;
                 }
             }
-            catch (Exception ex)
+
+            EditClass editClass = new EditClass();
+            bool updated = editClass.UpdateProductInDatabase(Product);
+
+            if (updated)
             {
-                MessageBox.Show($"Не удалось сохранить изображение: {ex.Message}", "Ошибка",
-                              MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                return Product.photo_path;
+                MessageBox.Show("✅ Товар успешно обновлен!", "Успех",
+                              MessageBoxButtons.OK, MessageBoxIcon.Information);
+                DialogResult = DialogResult.OK;
+                Close();
+            }
+            else
+            {
+                MessageBox.Show("Не удалось сохранить изменения в базе данных", "Ошибка",
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
-        private bool SaveOptimizedImage(Image image, string filePath)
+        private void Back_Click(object sender, EventArgs e)
         {
-            try
+            if (HasUnsavedChanges())
             {
-                // Создаем временный Bitmap для сохранения
-                using (Bitmap bitmap = new Bitmap(image))
-                {
-                    // Определяем параметры сжатия для JPEG
-                    var encoder = System.Drawing.Imaging.ImageCodecInfo.GetImageEncoders()
-                        .FirstOrDefault(c => c.FormatID == System.Drawing.Imaging.ImageFormat.Jpeg.Guid);
-
-                    if (encoder != null)
-                    {
-                        var encoderParams = new System.Drawing.Imaging.EncoderParameters(1);
-                        encoderParams.Param[0] = new System.Drawing.Imaging.EncoderParameter(
-                            System.Drawing.Imaging.Encoder.Quality, 85L);
-
-                        // Сохраняем во временный файл сначала
-                        string tempFile = Path.GetTempFileName();
-                        try
-                        {
-                            bitmap.Save(tempFile, encoder, encoderParams);
-
-                            // Копируем временный файл в нужное место
-                            File.Copy(tempFile, filePath, true);
-
-                            // Удаляем временный файл
-                            File.Delete(tempFile);
-                        }
-                        catch
-                        {
-                            if (File.Exists(tempFile))
-                                File.Delete(tempFile);
-                            throw;
-                        }
-                    }
-                    else
-                    {
-                        // Если не нашли JPEG кодек, сохраняем стандартным способом
-                        bitmap.Save(filePath, System.Drawing.Imaging.ImageFormat.Jpeg);
-                    }
-                }
-
-                // Принудительно вызываем сборку мусора
-                GC.Collect();
-                GC.WaitForPendingFinalizers();
-
-                return true;
+                var result = MessageBox.Show("У вас есть несохраненные изменения. Выйти?",
+                                            "Подтверждение",
+                                            MessageBoxButtons.YesNo,
+                                            MessageBoxIcon.Question);
+                if (result == DialogResult.No)
+                    return;
             }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"Ошибка при сохранении изображения: {ex.Message}", "Ошибка",
-                              MessageBoxButtons.OK, MessageBoxIcon.Error);
-                return false;
-            }
+
+            DialogResult = DialogResult.Cancel;
+            Close();
         }
-        private void ReleaseImageResources()
+
+        private bool HasUnsavedChanges()
         {
-            // Освобождаем ресурсы текущего изображения в PictureBox
-            if (pictureBoxProduct.Image != null)
-            {
-                Image oldImage = pictureBoxProduct.Image;
-                pictureBoxProduct.Image = null;
-                oldImage.Dispose();
-            }
+            decimal currentPrice;
+            ValidatePrice(Price.Text, out currentPrice);
 
-            // Принудительно вызываем сборку мусора
-            GC.Collect();
-            GC.WaitForPendingFinalizers();
+            int currentQuantity;
+            ValidateQuantity(Count.Text, out currentQuantity);
+
+            return NameTB.Text != Product.name ||
+                   currentPrice != Product.price ||
+                   currentQuantity != Product.stock_quantity ||
+                   (CategoryCb.SelectedValue != null &&
+                    CategoryCb.SelectedValue != DBNull.Value &&
+                    Convert.ToInt32(CategoryCb.SelectedValue) != Product.category_id) ||
+                   _imageChanged;
         }
 
-        private bool IsDefaultImage()
-        {
-            try
-            {
-                return _selectedImage == null ||
-                       (_defaultImagePath != null &&
-                        pictureBoxProduct.ImageLocation == _defaultImagePath);
-            }
-            catch
-            {
-                return true;
-            }
-        }
-
-        private bool IsDefaultImageFile(string filePath)
-        {
-            try
-            {
-                return Path.GetFileName(filePath) == "Default.jpg";
-            }
-            catch
-            {
-                return false;
-            }
-        }
-
-        // Обработчики для работы с изображением
         private void btnLoadImage_Click(object sender, EventArgs e)
         {
             LoadImageFromFile();
@@ -590,7 +878,8 @@ namespace ynivermag_bad
 
         private void btnRemoveImage_Click(object sender, EventArgs e)
         {
-            RemoveImage();
+            LoadDefaultImage();
+            _imageChanged = true;
         }
 
         private void pictureBoxProduct_Click(object sender, EventArgs e)
@@ -605,63 +894,52 @@ namespace ynivermag_bad
                 openFileDialog.Filter = "Изображения (*.jpg;*.jpeg;*.png;*.bmp;*.gif)|*.jpg;*.jpeg;*.png;*.bmp;*.gif";
                 openFileDialog.FilterIndex = 1;
                 openFileDialog.Title = $"Выберите изображение товара (макс. {MAX_IMAGE_SIZE / (1024 * 1024)} МБ)";
-                openFileDialog.RestoreDirectory = true;
-
-                // Добавляем обработчик для проверки размера файла
-                openFileDialog.FileOk += OpenFileDialog_FileOk;
 
                 if (openFileDialog.ShowDialog() == DialogResult.OK)
                 {
+                    string filePath = openFileDialog.FileName;
+
+                    // Проверка размера файла
+                    FileInfo fileInfo = new FileInfo(filePath);
+                    if (fileInfo.Length > MAX_IMAGE_SIZE)
+                    {
+                        MessageBox.Show($"Размер файла слишком большой ({fileInfo.Length / (1024 * 1024)} МБ).\n" +
+                                       $"Максимальный разрешенный размер: {MAX_IMAGE_SIZE / (1024 * 1024)} МБ.",
+                                       "Ошибка размера файла",
+                                       MessageBoxButtons.OK,
+                                       MessageBoxIcon.Warning);
+                        return;
+                    }
+
+                    // Проверка расширения
+                    string extension = Path.GetExtension(filePath).ToLower();
+                    string[] allowedExtensions = { ".jpg", ".jpeg", ".png", ".bmp", ".gif" };
+
+                    if (!allowedExtensions.Contains(extension))
+                    {
+                        MessageBox.Show("Выберите файл с поддерживаемым форматом:\n" +
+                                       "JPG, JPEG, PNG, BMP или GIF",
+                                       "Неверный формат файла",
+                                       MessageBoxButtons.OK,
+                                       MessageBoxIcon.Warning);
+                        return;
+                    }
+
                     try
                     {
-                        string filePath = openFileDialog.FileName;
+                        ReleaseImageResources();
 
-                        // Проверяем размер файла
-                        FileInfo fileInfo = new FileInfo(filePath);
-                        if (fileInfo.Length > MAX_IMAGE_SIZE)
-                        {
-                            MessageBox.Show($"Размер файла слишком большой ({fileInfo.Length / (1024 * 1024)} МБ).\n" +
-                                           $"Максимальный разрешенный размер: {MAX_IMAGE_SIZE / (1024 * 1024)} МБ.\n\n" +
-                                           "Пожалуйста, выберите файл меньшего размера или сожмите изображение.",
-                                           "Ошибка размера файла",
-                                           MessageBoxButtons.OK,
-                                           MessageBoxIcon.Warning);
-                            return;
-                        }
-
-                        // Проверяем расширение файла
-                        string extension = Path.GetExtension(filePath).ToLower();
-                        string[] allowedExtensions = { ".jpg", ".jpeg", ".png", ".bmp", ".gif" };
-
-                        if (!allowedExtensions.Contains(extension))
-                        {
-                            MessageBox.Show("Выберите файл с поддерживаемым форматом:\n" +
-                                           "JPG, JPEG, PNG, BMP или GIF",
-                                           "Неверный формат файла",
-                                           MessageBoxButtons.OK,
-                                           MessageBoxIcon.Warning);
-                            return;
-                        }
-
-                        // Освобождаем предыдущее изображение
-                        if (_selectedImage != null)
-                        {
-                            _selectedImage.Dispose();
-                            _selectedImage = null;
-                        }
-
-                        // Загружаем изображение через FileStream, чтобы не блокировать файл
-                        using (FileStream stream = new FileStream(filePath, FileMode.Open, FileAccess.Read))
+                        using (FileStream stream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read))
                         {
                             _selectedImage = Image.FromStream(stream);
+                            _selectedImage = new Bitmap(_selectedImage);
                         }
 
-                        // Дополнительная проверка размера изображения в пикселях
                         if (_selectedImage.Width > 4000 || _selectedImage.Height > 4000)
                         {
                             var result = MessageBox.Show($"Разрешение изображения очень большое ({_selectedImage.Width}x{_selectedImage.Height}).\n" +
                                                        "Рекомендуется использовать изображения до 2000x2000 пикселей.\n\n" +
-                                                       "Хотите продолжить загрузку? (изображение будет сжато)",
+                                                       "Продолжить?",
                                                        "Большое разрешение",
                                                        MessageBoxButtons.YesNo,
                                                        MessageBoxIcon.Question);
@@ -674,16 +952,13 @@ namespace ynivermag_bad
                             }
                         }
 
-                        // Масштабируем изображение для PictureBox
-                        pictureBoxProduct.Image = ScaleImage(_selectedImage, pictureBoxProduct.Width, pictureBoxProduct.Height);
+                        SetPictureBoxImage(_selectedImage);
                         _imageChanged = true;
-                    }
-                    catch (OutOfMemoryException)
-                    {
-                        MessageBox.Show("Файл поврежден или не является корректным изображением.",
-                                      "Ошибка загрузки",
-                                      MessageBoxButtons.OK,
-                                      MessageBoxIcon.Error);
+
+                        toolTip1.SetToolTip(pictureBoxProduct,
+                            $"Файл: {fileInfo.Name}\n" +
+                            $"Размер: {FormatFileSize(fileInfo.Length)}\n" +
+                            $"Разрешение: {_selectedImage.Width}x{_selectedImage.Height}");
                     }
                     catch (Exception ex)
                     {
@@ -691,75 +966,32 @@ namespace ynivermag_bad
                                       MessageBoxButtons.OK, MessageBoxIcon.Error);
                     }
                 }
-
-                // Отписываемся от события
-                openFileDialog.FileOk -= OpenFileDialog_FileOk;
             }
         }
 
-        private void OpenFileDialog_FileOk(object sender, CancelEventArgs e)
+        private string FormatFileSize(long bytes)
         {
-            var openFileDialog = sender as OpenFileDialog;
-            if (openFileDialog != null)
+            string[] sizes = { "Б", "КБ", "МБ" };
+            double len = bytes;
+            int order = 0;
+
+            while (len >= 1024 && order < sizes.Length - 1)
             {
-                try
-                {
-                    FileInfo fileInfo = new FileInfo(openFileDialog.FileName);
-
-                    // Проверяем размер файла
-                    if (fileInfo.Length > MAX_IMAGE_SIZE)
-                    {
-                        MessageBox.Show($"Размер файла слишком большой ({fileInfo.Length / (1024 * 1024)} МБ).\n" +
-                                       $"Максимальный разрешенный размер: {MAX_IMAGE_SIZE / (1024 * 1024)} МБ.",
-                                       "Ошибка размера файла",
-                                       MessageBoxButtons.OK,
-                                       MessageBoxIcon.Warning);
-                        e.Cancel = true;
-                        return;
-                    }
-
-                    // Проверяем расширение
-                    string extension = Path.GetExtension(openFileDialog.FileName).ToLower();
-                    string[] allowedExtensions = { ".jpg", ".jpeg", ".png", ".bmp", ".gif" };
-
-                    if (!allowedExtensions.Contains(extension))
-                    {
-                        MessageBox.Show("Выберите файл с поддерживаемым форматом:\n" +
-                                       "JPG, JPEG, PNG, BMP или GIF",
-                                       "Неверный формат файла",
-                                       MessageBoxButtons.OK,
-                                       MessageBoxIcon.Warning);
-                        e.Cancel = true;
-                    }
-                }
-                catch (Exception ex)
-                {
-                    MessageBox.Show($"Ошибка проверки файла: {ex.Message}",
-                                  "Ошибка",
-                                  MessageBoxButtons.OK,
-                                  MessageBoxIcon.Error);
-                    e.Cancel = true;
-                }
+                order++;
+                len /= 1024;
             }
+
+            return $"{len:0.##} {sizes[order]}";
         }
 
-        private void RemoveImage()
-        {
-            LoadDefaultImage();
-            _imageChanged = true;
-        }
+        #endregion
 
-        // Drag & Drop для PictureBox
+        #region Drag & Drop
+
         private void pictureBoxProduct_DragEnter(object sender, DragEventArgs e)
         {
-            if (e.Data.GetDataPresent(DataFormats.FileDrop))
-            {
-                e.Effect = DragDropEffects.Copy;
-            }
-            else
-            {
-                e.Effect = DragDropEffects.None;
-            }
+            e.Effect = e.Data.GetDataPresent(DataFormats.FileDrop) ?
+                DragDropEffects.Copy : DragDropEffects.None;
         }
 
         private void pictureBoxProduct_DragDrop(object sender, DragEventArgs e)
@@ -769,102 +1001,64 @@ namespace ynivermag_bad
             {
                 string filePath = files[0];
 
-                // Проверяем расширение файла
                 string extension = Path.GetExtension(filePath).ToLower();
                 string[] allowedExtensions = { ".jpg", ".jpeg", ".png", ".bmp", ".gif" };
 
-                if (allowedExtensions.Contains(extension))
+                if (!allowedExtensions.Contains(extension))
                 {
-                    // Проверяем размер файла перед загрузкой
-                    try
-                    {
-                        FileInfo fileInfo = new FileInfo(filePath);
-                        if (fileInfo.Length > MAX_IMAGE_SIZE)
-                        {
-                            MessageBox.Show($"Размер файла слишком большой ({fileInfo.Length / (1024 * 1024)} МБ).\n" +
-                                           $"Максимальный разрешенный размер: {MAX_IMAGE_SIZE / (1024 * 1024)} МБ.",
-                                           "Ошибка размера файла",
-                                           MessageBoxButtons.OK,
-                                           MessageBoxIcon.Warning);
-                            return;
-                        }
-
-                        // Проверяем размер изображения в пикселях
-                        using (Image tempImage = Image.FromFile(filePath))
-                        {
-                            if (tempImage.Width > 4000 || tempImage.Height > 4000)
-                            {
-                                var result = MessageBox.Show($"Разрешение изображения очень большое ({tempImage.Width}x{tempImage.Height}).\n" +
-                                                           "Рекомендуется использовать изображения до 2000x2000 пикселей.\n\n" +
-                                                           "Хотите продолжить загрузку? (изображение будет сжато)",
-                                                           "Большое разрешение",
-                                                           MessageBoxButtons.YesNo,
-                                                           MessageBoxIcon.Question);
-
-                                if (result == DialogResult.No)
-                                {
-                                    return;
-                                }
-                            }
-                        }
-
-                        // Освобождаем предыдущее изображение
-                        if (_selectedImage != null)
-                        {
-                            _selectedImage.Dispose();
-                            _selectedImage = null;
-                        }
-
-                        // Загружаем изображение через FileStream
-                        using (FileStream stream = new FileStream(filePath, FileMode.Open, FileAccess.Read))
-                        {
-                            _selectedImage = Image.FromStream(stream);
-                        }
-
-                        pictureBoxProduct.Image = ScaleImage(_selectedImage, pictureBoxProduct.Width, pictureBoxProduct.Height);
-                        _imageChanged = true;
-                    }
-                    catch (OutOfMemoryException)
-                    {
-                        MessageBox.Show("Файл поврежден или не является корректным изображением.",
-                                      "Ошибка загрузки",
-                                      MessageBoxButtons.OK,
-                                      MessageBoxIcon.Error);
-                    }
-                    catch (Exception ex)
-                    {
-                        MessageBox.Show($"Не удалось загрузить изображение: {ex.Message}", "Ошибка",
-                                      MessageBoxButtons.OK, MessageBoxIcon.Error);
-                    }
+                    MessageBox.Show("Выберите файл изображения (jpg, jpeg, png, bmp, gif)",
+                                  "Ошибка", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return;
                 }
-                else
+
+                FileInfo fileInfo = new FileInfo(filePath);
+                if (fileInfo.Length > MAX_IMAGE_SIZE)
                 {
-                    MessageBox.Show("Выберите файл изображения (jpg, jpeg, png, bmp, gif)", "Ошибка",
-                                  MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    MessageBox.Show($"Размер файла слишком большой ({fileInfo.Length / (1024 * 1024)} МБ).",
+                                  "Ошибка размера файла",
+                                  MessageBoxButtons.OK,
+                                  MessageBoxIcon.Warning);
+                    return;
+                }
+
+                try
+                {
+                    ReleaseImageResources();
+
+                    using (FileStream stream = new FileStream(filePath, FileMode.Open, FileAccess.Read))
+                    {
+                        _selectedImage = Image.FromStream(stream);
+                        _selectedImage = new Bitmap(_selectedImage);
+                    }
+
+                    SetPictureBoxImage(_selectedImage);
+                    _imageChanged = true;
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show($"Не удалось загрузить изображение: {ex.Message}", "Ошибка",
+                                  MessageBoxButtons.OK, MessageBoxIcon.Error);
                 }
             }
         }
 
-        protected override void OnFormClosing(FormClosingEventArgs e)
+        #endregion
+
+        #region Дополнительные обработчики
+
+        private void NameTB_Validating(object sender, CancelEventArgs e)
         {
-            // Освобождаем ресурсы изображения
-            if (_selectedImage != null)
+            if (!string.IsNullOrWhiteSpace(NameTB.Text))
             {
-                _selectedImage.Dispose();
-                _selectedImage = null;
+                string name = NameTB.Text.Trim();
+                if (name.Length > 0)
+                {
+                    name = char.ToUpper(name[0]) + name.Substring(1);
+                    NameTB.Text = name;
+                }
             }
-
-            // Очищаем PictureBox
-            if (pictureBoxProduct.Image != null)
-            {
-                pictureBoxProduct.Image.Dispose();
-                pictureBoxProduct.Image = null;
-            }
-
-            base.OnFormClosing(e);
         }
 
-        // Показ подсказки при наведении на PictureBox
         private void pictureBoxProduct_MouseHover(object sender, EventArgs e)
         {
             toolTip1.SetToolTip(pictureBoxProduct,
@@ -874,170 +1068,16 @@ namespace ynivermag_bad
                 "Поддерживаемые форматы: JPG, JPEG, PNG, BMP, GIF");
         }
 
-        // Фильтрация ввода для цены
-        private void Price_TextChanged(object sender, EventArgs e)
+        #endregion
+
+        #region Жизненный цикл формы
+
+        protected override void OnFormClosing(FormClosingEventArgs e)
         {
-            // Сохраняем позицию курсора
-            int cursorPosition = Price.SelectionStart;
-            int oldLength = Price.Text.Length;
-
-            // Убираем все нецифровые символы, кроме точки и запятой
-            string text = Price.Text;
-            string filteredText = new string(text.Where(c => char.IsDigit(c) || c == '.' || c == ',').ToArray());
-
-            // Заменяем запятую на точку
-            filteredText = filteredText.Replace(',', '.');
-
-            // Проверяем, чтобы точка была только одна
-            int dotCount = filteredText.Count(c => c == '.');
-            if (dotCount > 1)
-            {
-                // Оставляем только первую точку
-                int firstDotIndex = filteredText.IndexOf('.');
-                filteredText = filteredText.Substring(0, firstDotIndex + 1) +
-                              filteredText.Substring(firstDotIndex + 1).Replace(".", "");
-            }
-
-            // Проверяем, что после точки не больше 2 цифр
-            if (filteredText.Contains('.'))
-            {
-                int dotIndex = filteredText.IndexOf('.');
-                string beforeDot = filteredText.Substring(0, dotIndex);
-                string afterDot = filteredText.Substring(dotIndex + 1);
-
-                // Ограничиваем количество цифр после точки до 2
-                if (afterDot.Length > 2)
-                {
-                    afterDot = afterDot.Substring(0, 2);
-                    filteredText = beforeDot + "." + afterDot;
-                }
-            }
-
-            // Проверяем, что перед точкой не больше 6 цифр (разумный максимум для цены)
-            if (filteredText.Contains('.'))
-            {
-                int dotIndex = filteredText.IndexOf('.');
-                string beforeDot = filteredText.Substring(0, dotIndex);
-                if (beforeDot.Length > 6)
-                {
-                    beforeDot = beforeDot.Substring(0, 6);
-                    filteredText = beforeDot + filteredText.Substring(dotIndex);
-                }
-            }
-            else
-            {
-                // Если нет точки, ограничиваем длину целой части
-                if (filteredText.Length > 6)
-                {
-                    filteredText = filteredText.Substring(0, 6);
-                }
-            }
-
-            // Проверяем, что число не начинается с нуля (если есть другие цифры)
-            if (filteredText.Length > 1 && filteredText[0] == '0' && filteredText[1] != '.')
-            {
-                filteredText = filteredText.Substring(1);
-            }
-
-            // Если строка пустая или состоит только из точки - оставляем как есть
-            if (filteredText == ".")
-            {
-                filteredText = "0.";
-            }
-
-            // Обновляем текст, если он изменился
-            if (filteredText != text)
-            {
-                Price.Text = filteredText;
-
-                // Корректируем позицию курсора
-                int newLength = Price.Text.Length;
-                if (cursorPosition > newLength)
-                {
-                    cursorPosition = newLength;
-                }
-                else if (cursorPosition > 0 && cursorPosition <= newLength)
-                {
-                    // Если удалили символ перед курсором, сдвигаем курсор
-                    if (oldLength > newLength)
-                    {
-                        cursorPosition = Math.Max(0, cursorPosition - 1);
-                    }
-                }
-
-                Price.SelectionStart = cursorPosition;
-            }
+            ReleaseImageResources();
+            base.OnFormClosing(e);
         }
 
-        // Дополнительный метод для валидации при потере фокуса
-        private void Price_Leave(object sender, EventArgs e)
-        {
-            if (string.IsNullOrWhiteSpace(Price.Text))
-            {
-                Price.Text = "0";
-                return;
-            }
-
-            // Парсим число и форматируем его с 2 знаками после запятой
-            if (decimal.TryParse(Price.Text, System.Globalization.NumberStyles.Any,
-                System.Globalization.CultureInfo.InvariantCulture, out decimal price))
-            {
-                // Ограничиваем максимальную цену
-                if (price > 1000000)
-                {
-                    price = 1000000;
-                    MessageBox.Show("Максимальная цена - 1 000 000", "Предупреждение",
-                        MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                }
-
-                // Форматируем с 2 знаками после запятой
-                Price.Text = price.ToString("0.##");
-            }
-            else
-            {
-                Price.Text = "0";
-            }
-        }
-
-        // Обработчик KeyPress для дополнительной фильтрации
-        private void Price_KeyPress(object sender, KeyPressEventArgs e)
-        {
-            // Разрешаем только цифры, точку, запятую и backspace
-            if (!char.IsControl(e.KeyChar) && !char.IsDigit(e.KeyChar) &&
-                e.KeyChar != '.' && e.KeyChar != ',')
-            {
-                e.Handled = true;
-            }
-
-            // Разрешаем только одну точку/запятую
-            if ((e.KeyChar == '.' || e.KeyChar == ',') &&
-                (Price.Text.Contains('.') || Price.Text.Contains(',')))
-            {
-                e.Handled = true;
-            }
-
-            // Не разрешаем точку в начале строки
-            if ((e.KeyChar == '.' || e.KeyChar == ',') && string.IsNullOrEmpty(Price.Text))
-            {
-                Price.Text = "0";
-                Price.SelectionStart = Price.Text.Length;
-                e.Handled = true;
-            }
-        }
-
-        // Фильтрация ввода для количества
-        private void Count_TextChanged(object sender, EventArgs e)
-        {
-            // Убираем все нецифровые символы
-            string text = Count.Text;
-            string filteredText = new string(text.Where(char.IsDigit).ToArray());
-
-            if (filteredText != text)
-            {
-                int cursorPosition = Count.SelectionStart;
-                Count.Text = filteredText;
-                Count.SelectionStart = Math.Min(cursorPosition, filteredText.Length);
-            }
-        }
+        #endregion
     }
 }

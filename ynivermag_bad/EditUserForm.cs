@@ -1,7 +1,11 @@
 ﻿using MySql.Data.MySqlClient;
 using System;
+using System.Collections.Generic;
+using System.ComponentModel;
 using System.Data;
+using System.Drawing;
 using System.Linq;
+using System.Text.RegularExpressions;
 using System.Windows.Forms;
 
 namespace ynivermag_bad
@@ -12,30 +16,66 @@ namespace ynivermag_bad
         public UserModel User { get; private set; }
         public bool IsEditMode { get; private set; }
         private bool _isPasswordChanged = false;
+        private bool _isUpdatingFields = false;
 
         public EditUserForm(UserModel user)
         {
             InitializeComponent();
             _connection = Connection.ConnectionString;
-            LoadRoles();
             User = user;
             IsEditMode = true;
+
+            // Настройка полей
+            ConfigurePasswordField();
+
+            // Загрузка данных
+            LoadRoles();
             LoadTextBoxs();
+
+            // Подписываемся на события для фильтрации ввода
+            SubscribeToEvents();
+        }
+
+        #region Инициализация
+
+        private void ConfigurePasswordField()
+        {
+            Password.PasswordChar = '*';
+            // Можно добавить кнопку для показа/скрытия пароля
+        }
+
+        private void SubscribeToEvents()
+        {
+            LastName.TextChanged += LastName_TextChanged;
+            FirstName.TextChanged += FirstName_TextChanged;
+            Login.TextChanged += Login_TextChanged;
+            Email.TextChanged += Email_TextChanged;
+            Password.TextChanged += Password_TextChanged;
+
+            // Подписка на события потери фокуса для форматирования
+            LastName.Leave += LastName_Leave;
+            FirstName.Leave += FirstName_Leave;
+            Email.Leave += Email_Leave;
         }
 
         private void LoadTextBoxs()
         {
+            _isUpdatingFields = true;
+
             LastName.Text = User.last_name;
             FirstName.Text = User.first_name;
             Login.Text = User.username;
             Email.Text = User.email;
             Password.Text = "";
-            Password.PasswordChar = '*';
 
-            // Устанавливаем текущую роль по значению, а не по тексту
-            RoleCb.SelectedValue = User.role_id;
-            // RoleCb.Text = User.RoleName; // Уберите эту строку - она вызывает ошибку
+            if (RoleCb.DataSource != null)
+            {
+                RoleCb.SelectedValue = User.role_id;
+            }
 
+            _isUpdatingFields = false;
+
+            // Блокировка роли для администраторов
             if (IsAdminUser())
             {
                 RoleCb.Enabled = false;
@@ -53,103 +93,302 @@ namespace ynivermag_bad
                 using (var connection = new MySqlConnection(_connection))
                 {
                     connection.Open();
-                    string query = "SELECT role_id, role_name FROM role ORDER BY role_id";
-                    MySqlCommand cmd = new MySqlCommand(query, connection);
-                    MySqlDataAdapter adapter = new MySqlDataAdapter(cmd);
+                    string query = "SELECT role_id, role_name FROM role WHERE isActive = 1 ORDER BY role_name";
+                    MySqlDataAdapter adapter = new MySqlDataAdapter(query, connection);
                     DataTable dt = new DataTable();
                     adapter.Fill(dt);
 
                     RoleCb.DataSource = dt;
                     RoleCb.DisplayMember = "role_name";
                     RoleCb.ValueMember = "role_id";
+
+                    if (User != null && User.role_id > 0)
+                    {
+                        RoleCb.SelectedValue = User.role_id;
+                    }
                 }
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Ошибка загрузки ролей: {ex.Message}");
+                MessageBox.Show($"Ошибка загрузки ролей: {ex.Message}", "Ошибка",
+                              MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
         private bool IsAdminUser()
         {
-            // Проверяем, является ли пользователь администратором
-            return User.RoleName?.ToLower() == "администратор" ||
+            return User.role_id == 1 ||
+                   User.RoleName?.ToLower() == "администратор" ||
                    User.RoleName?.ToLower() == "administrator" ||
-                   User.RoleName?.ToLower() == "admin" ||
-                   User.role_id == 1; // ID роли администратора из вашей БД
+                   User.RoleName?.ToLower() == "admin";
         }
 
-        private void EditUser_Click(object sender, EventArgs e)
+        #endregion
+
+        #region Фильтрация ввода (как в примере)
+
+        /// <summary>
+        /// Фильтрация ввода в поле фамилии (только русские буквы, дефис, пробел)
+        /// </summary>
+        private void LastName_TextChanged(object sender, EventArgs e)
         {
-            if (ValidateData())
+            if (_isUpdatingFields) return;
+
+            int selectionStart = LastName.SelectionStart;
+            string filteredText = FilterToRussianLetters(LastName.Text);
+
+            if (filteredText != LastName.Text)
             {
-                SaveUserData();
-                DialogResult = DialogResult.OK;
-                Close();
+                LastName.Text = filteredText;
+                LastName.SelectionStart = Math.Min(selectionStart, LastName.Text.Length);
             }
         }
 
-        private void Back_Click(object sender, EventArgs e)
+        /// <summary>
+        /// Фильтрация ввода в поле имени (только русские буквы, дефис, пробел)
+        /// </summary>
+        private void FirstName_TextChanged(object sender, EventArgs e)
         {
-            DialogResult = DialogResult.Cancel;
-            Close();
+            if (_isUpdatingFields) return;
+
+            int selectionStart = FirstName.SelectionStart;
+            string filteredText = FilterToRussianLetters(FirstName.Text);
+
+            if (filteredText != FirstName.Text)
+            {
+                FirstName.Text = filteredText;
+                FirstName.SelectionStart = Math.Min(selectionStart, FirstName.Text.Length);
+            }
         }
+
+        /// <summary>
+        /// Фильтр только для русских букв, дефиса и пробела
+        /// </summary>
+        private string FilterToRussianLetters(string input)
+        {
+            if (string.IsNullOrEmpty(input)) return input;
+
+            return new string(input.Where(c =>
+                (c >= 'А' && c <= 'Я') ||   // Заглавные русские
+                (c >= 'а' && c <= 'я') ||   // Строчные русские
+                c == 'Ё' || c == 'ё' ||     // Буква Ё
+                c == '-' ||                  // Дефис
+                c == ' ').ToArray());        // Пробел
+        }
+
+        /// <summary>
+        /// Фильтрация ввода в поле логина (только латиница, цифры, подчеркивание, точка)
+        /// </summary>
+        private void Login_TextChanged(object sender, EventArgs e)
+        {
+            if (_isUpdatingFields) return;
+
+            int selectionStart = Login.SelectionStart;
+            string filteredText = FilterToLoginChars(Login.Text);
+
+            if (filteredText != Login.Text)
+            {
+                Login.Text = filteredText;
+                Login.SelectionStart = Math.Min(selectionStart, Login.Text.Length);
+            }
+        }
+
+        /// <summary>
+        /// Фильтр для логина: только латиница, цифры, подчеркивание, точка
+        /// </summary>
+        private string FilterToLoginChars(string input)
+        {
+            if (string.IsNullOrEmpty(input)) return input;
+
+            return new string(input.Where(c =>
+                (c >= 'a' && c <= 'z') ||   // строчные латинские
+                (c >= 'A' && c <= 'Z') ||   // заглавные латинские
+                (c >= '0' && c <= '9') ||   // цифры
+                c == '_' ||                  // подчеркивание
+                c == '.').ToArray());        // точка
+        }
+
+        /// <summary>
+        /// Фильтрация email (только допустимые символы и автоматический lower case)
+        /// </summary>
+        private void Email_TextChanged(object sender, EventArgs e)
+        {
+            if (_isUpdatingFields) return;
+
+            int cursorPosition = Email.SelectionStart;
+            string text = Email.Text;
+
+            // Убираем пробелы
+            string filteredText = text.Replace(" ", "");
+
+            // Приводим к нижнему регистру
+            filteredText = filteredText.ToLower();
+
+            if (filteredText != text)
+            {
+                Email.Text = filteredText;
+                Email.SelectionStart = Math.Max(0, cursorPosition - (text.Length - filteredText.Length));
+            }
+        }
+
+        /// <summary>
+        /// Фильтрация ввода в поле пароля (никаких ограничений, кроме длины)
+        /// </summary>
+        private void Password_TextChanged(object sender, EventArgs e)
+        {
+            if (_isUpdatingFields) return;
+
+            if (!string.IsNullOrWhiteSpace(Password.Text))
+            {
+                _isPasswordChanged = true;
+            }
+
+            // Ограничиваем длину пароля
+            if (Password.Text.Length > 50)
+            {
+                int selectionStart = Password.SelectionStart;
+                Password.Text = Password.Text.Substring(0, 50);
+                Password.SelectionStart = Math.Min(selectionStart, Password.Text.Length);
+            }
+        }
+
+        #endregion
+
+        #region Валидация перед сохранением
 
         private bool ValidateData()
         {
+            List<string> errors = new List<string>();
+
+            // Проверка фамилии
             if (string.IsNullOrWhiteSpace(LastName.Text))
             {
-                MessageBox.Show("Введите фамилию");
-                LastName.Focus();
-                return false;
+                errors.Add("Введите фамилию пользователя");
+                LastName.BackColor = Color.LightPink;
+            }
+            else if (LastName.Text.Length < 2)
+            {
+                errors.Add("Фамилия должна содержать минимум 2 символа");
+                LastName.BackColor = Color.LightPink;
+            }
+            else if (LastName.Text.Length > 50)
+            {
+                errors.Add("Фамилия должна содержать не более 50 символов");
+                LastName.BackColor = Color.LightPink;
             }
 
+            // Проверка имени
             if (string.IsNullOrWhiteSpace(FirstName.Text))
             {
-                MessageBox.Show("Введите имя");
-                FirstName.Focus();
-                return false;
+                errors.Add("Введите имя пользователя");
+                FirstName.BackColor = Color.LightPink;
+            }
+            else if (FirstName.Text.Length < 2)
+            {
+                errors.Add("Имя должно содержать минимум 2 символа");
+                FirstName.BackColor = Color.LightPink;
+            }
+            else if (FirstName.Text.Length > 50)
+            {
+                errors.Add("Имя должно содержать не более 50 символов");
+                FirstName.BackColor = Color.LightPink;
             }
 
+            // Проверка логина
             if (string.IsNullOrWhiteSpace(Login.Text))
             {
-                MessageBox.Show("Введите логин");
-                Login.Focus();
-                return false;
+                errors.Add("Введите логин пользователя");
+                Login.BackColor = Color.LightPink;
             }
-
-            // Проверка на уникальность логина
-            if (!IsLoginUnique())
+            else if (Login.Text.Length < 3)
             {
-                MessageBox.Show("Пользователь с таким логином уже существует");
-                Login.Focus();
-                return false;
+                errors.Add("Логин должен содержать минимум 3 символа");
+                Login.BackColor = Color.LightPink;
+            }
+            else if (Login.Text.Length > 20)
+            {
+                errors.Add("Логин должен содержать не более 20 символов");
+                Login.BackColor = Color.LightPink;
+            }
+            else if (!IsLoginUnique())
+            {
+                errors.Add("Этот логин уже занят");
+                Login.BackColor = Color.LightPink;
             }
 
+            // Проверка email
             if (string.IsNullOrWhiteSpace(Email.Text))
             {
-                MessageBox.Show("Введите email");
-                Email.Focus();
-                return false;
+                errors.Add("Введите email пользователя");
+                Email.BackColor = Color.LightPink;
+            }
+            else if (!IsValidEmail(Email.Text))
+            {
+                errors.Add("Введите корректный email адрес (например: name@domain.com)");
+                Email.BackColor = Color.LightPink;
+            }
+            else if (!IsEmailUnique())
+            {
+                errors.Add("Пользователь с таким email уже существует");
+                Email.BackColor = Color.LightPink;
             }
 
-            // Проверка на уникальность email
-            if (!IsEmailUnique())
+            // Проверка пароля (если изменен)
+            if (_isPasswordChanged)
             {
-                MessageBox.Show("Пользователь с таким email уже существует");
-                Email.Focus();
-                return false;
+                if (string.IsNullOrWhiteSpace(Password.Text))
+                {
+                    errors.Add("Введите пароль");
+                    Password.BackColor = Color.LightPink;
+                }
+                else if (Password.Text.Length < 3)
+                {
+                    errors.Add("Пароль должен содержать минимум 3 символа");
+                    Password.BackColor = Color.LightPink;
+                }
+                else if (Password.Text.Length > 50)
+                {
+                    errors.Add("Пароль должен содержать не более 50 символов");
+                    Password.BackColor = Color.LightPink;
+                }
             }
 
-            // Проверка пароля (если введен)
-            if (!string.IsNullOrWhiteSpace(Password.Text) && Password.Text.Length < 6)
+            // Проверка роли
+            if (RoleCb.SelectedValue == null || RoleCb.SelectedValue == DBNull.Value)
             {
-                MessageBox.Show("Пароль должен содержать не менее 6 символов");
-                Password.Focus();
+                errors.Add("Выберите роль");
+                RoleCb.BackColor = Color.LightPink;
+            }
+
+            if (errors.Count > 0)
+            {
+                string errorMessage = "Пожалуйста, исправьте следующие ошибки:\n\n• " +
+                                     string.Join("\n• ", errors);
+                MessageBox.Show(errorMessage, "Ошибки валидации",
+                              MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return false;
             }
 
             return true;
+        }
+
+        private bool IsValidEmail(string email)
+        {
+            if (string.IsNullOrWhiteSpace(email)) return false;
+            if (email.Length > 100) return false;
+
+            try
+            {
+                // Базовая проверка наличия @ и точки
+                if (!email.Contains('@') || !email.Contains('.')) return false;
+
+                var addr = new System.Net.Mail.MailAddress(email);
+                return addr.Address == email;
+            }
+            catch
+            {
+                return false;
+            }
         }
 
         private bool IsLoginUnique()
@@ -202,85 +441,117 @@ namespace ynivermag_bad
             }
         }
 
+        #endregion
+
+        #region Сохранение данных
+
         private void SaveUserData()
         {
-            User.last_name = LastName.Text.Trim();
-            User.first_name = FirstName.Text.Trim();
-            User.username = Login.Text.Trim();
-            User.email = Email.Text.Trim();
+            User.last_name = CapitalizeName(LastName.Text.Trim());
+            User.first_name = CapitalizeName(FirstName.Text.Trim());
+            User.username = Login.Text.Trim().ToLower();
+            User.email = Email.Text.Trim().ToLower();
 
-            if (RoleCb.SelectedValue != null)
+            if (RoleCb.SelectedValue != null && RoleCb.SelectedValue != DBNull.Value)
             {
                 User.role_id = (int)RoleCb.SelectedValue;
             }
 
-            // Обновляем пароль только если он был изменен
             if (_isPasswordChanged && !string.IsNullOrWhiteSpace(Password.Text))
             {
-                string passwordHash = MySQLHelper.GetHash(Password.Text);
-                User.password_hash = passwordHash;
+                User.password_hash = MySQLHelper.GetHash(Password.Text);
             }
         }
 
-        private void LastName_TextChanged(object sender, EventArgs e)
+        private string CapitalizeName(string name)
         {
-            int selectionStart = LastName.SelectionStart;
-            string filteredText = InputValidator.FilterToRussianLetters(LastName.Text);
+            if (string.IsNullOrWhiteSpace(name)) return name;
 
-            if (filteredText != LastName.Text)
+            string[] parts = name.Split(new[] { ' ', '-' }, StringSplitOptions.RemoveEmptyEntries);
+            for (int i = 0; i < parts.Length; i++)
             {
-                LastName.Text = filteredText;
-                LastName.SelectionStart = Math.Min(selectionStart, LastName.Text.Length);
+                if (parts[i].Length > 0)
+                {
+                    parts[i] = char.ToUpper(parts[i][0]) + parts[i].Substring(1).ToLower();
+                }
             }
+
+            string result = string.Join(" ", parts);
+            if (name.Contains('-'))
+            {
+                result = result.Replace(" ", "-");
+            }
+
+            return result;
         }
 
-        private void FirstName_TextChanged(object sender, EventArgs e)
+        #endregion
+
+        #region Обработчики событий
+
+        private void EditUser_Click(object sender, EventArgs e)
         {
-            int selectionStart = FirstName.SelectionStart;
-            string filteredText = InputValidator.FilterToRussianLetters(FirstName.Text);
-
-            if (filteredText != FirstName.Text)
+            if (ValidateData())
             {
-                FirstName.Text = filteredText;
-                FirstName.SelectionStart = Math.Min(selectionStart, FirstName.Text.Length);
+                SaveUserData();
+                MessageBox.Show("✅ Пользователь успешно обновлен!", "Успех",
+                              MessageBoxButtons.OK, MessageBoxIcon.Information);
+                DialogResult = DialogResult.OK;
+                Close();
             }
         }
 
-        private void Login_TextChanged(object sender, EventArgs e)
+        private void Back_Click(object sender, EventArgs e)
         {
-            int selectionStart = Login.SelectionStart;
-            string filteredText = new string(Login.Text
-                .Where(c => (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
-                           char.IsDigit(c) || c == '_' || c == '.')
-                .ToArray());
-
-            if (filteredText != Login.Text)
+            if (HasUnsavedChanges())
             {
-                Login.Text = filteredText;
-                Login.SelectionStart = Math.Min(selectionStart, Login.Text.Length);
+                var result = MessageBox.Show("У вас есть несохраненные изменения. Выйти?",
+                                            "Подтверждение",
+                                            MessageBoxButtons.YesNo,
+                                            MessageBoxIcon.Question);
+                if (result == DialogResult.No)
+                    return;
             }
+
+            DialogResult = DialogResult.Cancel;
+            Close();
         }
 
-        private void Email_TextChanged(object sender, EventArgs e)
+        private bool HasUnsavedChanges()
         {
-            // Приводим email к нижнему регистру
-            string text = Email.Text;
-            string formattedText = text.ToLower();
-
-            if (formattedText != text)
-            {
-                int cursorPosition = Email.SelectionStart;
-                Email.Text = formattedText;
-                Email.SelectionStart = Math.Min(cursorPosition, formattedText.Length);
-            }
+            return LastName.Text != User.last_name ||
+                   FirstName.Text != User.first_name ||
+                   Login.Text != User.username ||
+                   Email.Text != User.email ||
+                   (_isPasswordChanged && !string.IsNullOrWhiteSpace(Password.Text)) ||
+                   (RoleCb.SelectedValue != null &&
+                    (int)RoleCb.SelectedValue != User.role_id);
         }
 
-        private void Password_TextChanged(object sender, EventArgs e)
+        private void LastName_Leave(object sender, EventArgs e)
         {
-            if (!string.IsNullOrWhiteSpace(Password.Text))
+            if (!string.IsNullOrWhiteSpace(LastName.Text))
             {
-                _isPasswordChanged = true;
+                LastName.Text = CapitalizeName(LastName.Text);
             }
         }
+
+        private void FirstName_Leave(object sender, EventArgs e)
+        {
+            if (!string.IsNullOrWhiteSpace(FirstName.Text))
+            {
+                FirstName.Text = CapitalizeName(FirstName.Text);
+            }
+        }
+
+        private void Email_Leave(object sender, EventArgs e)
+        {
+            if (!string.IsNullOrWhiteSpace(Email.Text))
+            {
+                Email.Text = Email.Text.Trim().ToLower();
+            }
+        }
+
+        #endregion
     }
 }

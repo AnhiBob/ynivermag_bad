@@ -13,10 +13,12 @@ namespace ynivermag_bad
     public partial class MenuTovarovedForm : Form
     {
         private string _fio;
-        public MenuTovarovedForm(string FIO)
+        private string _login;
+        public MenuTovarovedForm(string FIO, string login = null)
         {
             InitializeComponent();
             _fio = FIO;
+            _login = login;
             FIOlb.Text = _fio;
         }
 
@@ -38,6 +40,13 @@ namespace ynivermag_bad
         {
             ShowReports form1 = new ShowReports(_fio, 3);
             form1.Show();
+            this.Hide();
+        }
+
+        private void button1_Click(object sender, EventArgs e)
+        {
+            InventoryForm inventoryForm = new InventoryForm(_fio, _login);
+            inventoryForm.Show();
             this.Hide();
         }
     }

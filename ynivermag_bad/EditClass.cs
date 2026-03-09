@@ -1,9 +1,6 @@
 ﻿using MySql.Data.MySqlClient;
 using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+using System.Data;
 using System.Windows.Forms;
 
 namespace ynivermag_bad
@@ -17,6 +14,8 @@ namespace ynivermag_bad
             return new MySqlConnection(_connection);
         }
 
+        #region Загрузка данных
+
         public ClientModel LoadClientById(int clientId)
         {
             using (var connection = new MySqlConnection(Connection.ConnectionString))
@@ -25,14 +24,14 @@ namespace ynivermag_bad
                 {
                     connection.Open();
                     string query = @"SELECT 
-                client_id,
-                email,
-                first_name,
-                last_name,
-                phone,
-                address
-            FROM client
-            WHERE client_id = @ClientId";
+                        client_id,
+                        email,
+                        first_name,
+                        last_name,
+                        phone,
+                        address
+                    FROM client
+                    WHERE client_id = @ClientId";
 
                     MySqlCommand cmd = new MySqlCommand(query, connection);
                     cmd.Parameters.AddWithValue("@ClientId", clientId);
@@ -52,7 +51,6 @@ namespace ynivermag_bad
                             };
                         }
                     }
-                    connection.Close();
                     return null;
                 }
                 catch (Exception ex)
@@ -62,6 +60,7 @@ namespace ynivermag_bad
                 }
             }
         }
+
         public ProductModel LoadProductById(int productId)
         {
             using (var connection = new MySqlConnection(Connection.ConnectionString))
@@ -69,8 +68,18 @@ namespace ynivermag_bad
                 try
                 {
                     connection.Open();
-                    string query = @"SELECT product_id, name, price, stock_quantity, category_id, photo_path 
-                           FROM product WHERE product_id = @ProductId";
+                    string query = @"SELECT 
+                        p.product_id, 
+                        p.name, 
+                        p.price, 
+                        p.stock_quantity, 
+                        p.category_id, 
+                        p.photo_path,
+                        c.name as category_name,
+                        p.isActive
+                    FROM product p
+                    LEFT JOIN category c ON p.category_id = c.category_id
+                    WHERE p.product_id = @ProductId";
 
                     using (MySqlCommand cmd = new MySqlCommand(query, connection))
                     {
@@ -80,16 +89,30 @@ namespace ynivermag_bad
                         {
                             if (reader.Read())
                             {
-                                return new ProductModel
+                                var product = new ProductModel
                                 {
                                     product_id = reader.GetInt32("product_id"),
                                     name = reader.GetString("name"),
                                     price = reader.GetDecimal("price"),
                                     stock_quantity = reader.GetInt32("stock_quantity"),
-                                    category_id = reader.GetInt32("category_id"),
                                     photo_path = reader.IsDBNull(reader.GetOrdinal("photo_path")) ?
-                                        null : reader.GetString("photo_path")
+                                        null : reader.GetString("photo_path"),
+                                    isActive = reader.GetBoolean("isActive")
                                 };
+
+                                // ВАЖНО: правильная обработка NULL для category_id
+                                if (!reader.IsDBNull(reader.GetOrdinal("category_id")))
+                                {
+                                    product.category_id = reader.GetInt32("category_id");
+                                    product.category_name = reader["category_name"]?.ToString();
+                                }
+                                else
+                                {
+                                    product.category_id = null;
+                                    product.category_name = null;
+                                }
+
+                                return product;
                             }
                         }
                     }
@@ -102,7 +125,59 @@ namespace ynivermag_bad
             }
             return null;
         }
-        public void UpdateClientInDatabase(ClientModel client)
+
+        public UserModel LoadUserById(int userId)
+        {
+            using (var connection = new MySqlConnection(Connection.ConnectionString))
+            {
+                try
+                {
+                    connection.Open();
+                    string query = @"SELECT 
+                        user_id,
+                        username,
+                        password_hash,
+                        email,
+                        first_name,
+                        last_name,
+                        role_id
+                    FROM user
+                    WHERE user_id = @UserId";
+
+                    MySqlCommand cmd = new MySqlCommand(query, connection);
+                    cmd.Parameters.AddWithValue("@UserId", userId);
+
+                    using (MySqlDataReader reader = cmd.ExecuteReader())
+                    {
+                        if (reader.Read())
+                        {
+                            return new UserModel
+                            {
+                                user_id = reader.GetInt32("user_id"),
+                                username = reader["username"]?.ToString() ?? "",
+                                password_hash = reader["password_hash"]?.ToString() ?? "",
+                                email = reader["email"]?.ToString() ?? "",
+                                first_name = reader["first_name"]?.ToString() ?? "",
+                                last_name = reader["last_name"]?.ToString() ?? "",
+                                role_id = reader.GetInt32("role_id")
+                            };
+                        }
+                    }
+                    return null;
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show($"Ошибка загрузки пользователя: {ex.Message}");
+                    return null;
+                }
+            }
+        }
+
+        #endregion
+
+        #region Обновление данных
+
+        public bool UpdateClientInDatabase(ClientModel client)
         {
             using (var connection = new MySqlConnection(Connection.ConnectionString))
             {
@@ -110,32 +185,31 @@ namespace ynivermag_bad
                 {
                     connection.Open();
                     string query = @"UPDATE client 
-                SET email = @Email,
-                    first_name = @FirstName,
-                    last_name = @LastName,
-                    phone = @Phone,
-                    address = @Address
-                WHERE client_id = @ClientId";
+                        SET email = @Email,
+                            first_name = @FirstName,
+                            last_name = @LastName,
+                            phone = @Phone,
+                            address = @Address
+                        WHERE client_id = @ClientId";
 
                     MySqlCommand cmd = new MySqlCommand(query, connection);
-                    cmd.Parameters.AddWithValue("@Email", client.email);
-                    cmd.Parameters.AddWithValue("@FirstName", client.first_name);
-                    cmd.Parameters.AddWithValue("@LastName", client.last_name);
-                    cmd.Parameters.AddWithValue("@Phone", client.phone);
-                    cmd.Parameters.AddWithValue("@Address", client.address);
+                    cmd.Parameters.AddWithValue("@Email", client.email ?? "");
+                    cmd.Parameters.AddWithValue("@FirstName", client.first_name ?? "");
+                    cmd.Parameters.AddWithValue("@LastName", client.last_name ?? "");
+                    cmd.Parameters.AddWithValue("@Phone", client.phone ?? "");
+                    cmd.Parameters.AddWithValue("@Address", client.address ?? "");
                     cmd.Parameters.AddWithValue("@ClientId", client.client_id);
 
-                    cmd.ExecuteNonQuery();
-                    connection.Close();
+                    int affected = cmd.ExecuteNonQuery();
+                    return affected > 0;
                 }
                 catch (Exception ex)
                 {
                     MessageBox.Show($"Ошибка обновления клиента: {ex.Message}");
+                    return false;
                 }
             }
         }
-
-       
 
         public bool UpdateProductInDatabase(ProductModel product)
         {
@@ -144,34 +218,54 @@ namespace ynivermag_bad
                 try
                 {
                     connection.Open();
-                    string query = @"UPDATE product 
-                           SET name = @Name,
-                               price = @Price,
-                               stock_quantity = @StockQuantity,
-                               category_id = @CategoryId,
-                               photo_path = @PhotoPath
-                           WHERE product_id = @ProductId";
 
-                    using (MySqlCommand cmd = new MySqlCommand(query, connection))
+                    string query;
+                    MySqlCommand cmd;
+
+                    // Проверяем, нужно ли обновлять photo_path
+                    if (!string.IsNullOrEmpty(product.photo_path))
                     {
-                        cmd.Parameters.AddWithValue("@ProductId", product.product_id);
-                        cmd.Parameters.AddWithValue("@Name", product.name);
-                        cmd.Parameters.AddWithValue("@Price", product.price);
-                        cmd.Parameters.AddWithValue("@StockQuantity", product.stock_quantity);
-                        cmd.Parameters.AddWithValue("@CategoryId", product.category_id);
+                        query = @"UPDATE product 
+                               SET name = @Name,
+                                   price = @Price,
+                                   stock_quantity = @StockQuantity,
+                                   category_id = @CategoryId,
+                                   photo_path = @PhotoPath
+                               WHERE product_id = @ProductId";
 
-                        if (!string.IsNullOrEmpty(product.photo_path))
-                        {
-                            cmd.Parameters.AddWithValue("@PhotoPath", product.photo_path);
-                        }
-                        else
-                        {
-                            cmd.Parameters.AddWithValue("@PhotoPath", DBNull.Value);
-                        }
-
-                        int rowsAffected = cmd.ExecuteNonQuery();
-                        return rowsAffected > 0;
+                        cmd = new MySqlCommand(query, connection);
+                        cmd.Parameters.AddWithValue("@PhotoPath", product.photo_path);
                     }
+                    else
+                    {
+                        query = @"UPDATE product 
+                               SET name = @Name,
+                                   price = @Price,
+                                   stock_quantity = @StockQuantity,
+                                   category_id = @CategoryId,
+                                   photo_path = NULL
+                               WHERE product_id = @ProductId";
+
+                        cmd = new MySqlCommand(query, connection);
+                    }
+
+                    cmd.Parameters.AddWithValue("@ProductId", product.product_id);
+                    cmd.Parameters.AddWithValue("@Name", product.name ?? "");
+                    cmd.Parameters.AddWithValue("@Price", product.price);
+                    cmd.Parameters.AddWithValue("@StockQuantity", product.stock_quantity);
+
+                    // ВАЖНО: правильная обработка NULL для category_id
+                    if (product.category_id.HasValue)
+                    {
+                        cmd.Parameters.AddWithValue("@CategoryId", product.category_id.Value);
+                    }
+                    else
+                    {
+                        cmd.Parameters.AddWithValue("@CategoryId", DBNull.Value);
+                    }
+
+                    int affected = cmd.ExecuteNonQuery();
+                    return affected > 0;
                 }
                 catch (Exception ex)
                 {
@@ -182,96 +276,113 @@ namespace ynivermag_bad
             }
         }
 
-        public UserModel LoadUserById(int userId)
+        public bool UpdateUserInDatabase(UserModel user)
         {
-            Console.WriteLine($"Loading user with ID: {userId}"); // Отладочный вывод
-
             using (var connection = new MySqlConnection(Connection.ConnectionString))
             {
                 try
                 {
                     connection.Open();
-                    string query = @"SELECT 
-                user_id,
-                username,
-                password_hash,
-                email,
-                first_name,
-                last_name,
-                role_id
-            FROM user
-            WHERE user_id = @UserId";
 
-                    MySqlCommand cmd = new MySqlCommand(query, connection);
-                    cmd.Parameters.AddWithValue("@UserId", userId);
+                    string query;
+                    MySqlCommand cmd;
 
-                    using (MySqlDataReader reader = cmd.ExecuteReader())
+                    // Если пароль изменен
+                    if (!string.IsNullOrEmpty(user.password_hash))
                     {
-                        if (reader.Read())
-                        {
-                            var user = new UserModel
-                            {
-                                user_id = reader.GetInt32("user_id"),
-                                username = reader["username"]?.ToString() ?? "",
-                                password_hash = reader["password_hash"]?.ToString() ?? "",
-                                email = reader["email"]?.ToString() ?? "",
-                                first_name = reader["first_name"]?.ToString() ?? "",
-                                last_name = reader["last_name"]?.ToString() ?? "",
-                                role_id = reader.GetInt32("role_id")
-                            };
+                        query = @"UPDATE user 
+                                SET username = @Username,
+                                    password_hash = @PasswordHash,
+                                    email = @Email,
+                                    first_name = @FirstName,
+                                    last_name = @LastName,
+                                    role_id = @RoleId
+                                WHERE user_id = @UserId";
 
-                            Console.WriteLine($"User loaded successfully: {user.first_name} {user.last_name}");
-                            return user;
-                        }
-                        else
-                        {
-                            Console.WriteLine($"No user found with ID: {userId}");
-                            return null;
-                        }
+                        cmd = new MySqlCommand(query, connection);
+                        cmd.Parameters.AddWithValue("@PasswordHash", user.password_hash);
                     }
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"Error loading user: {ex.Message}");
-                    MessageBox.Show($"Ошибка загрузки пользователя: {ex.Message}");
-                    return null;
-                }
-            }
-        }
+                    else
+                    {
+                        query = @"UPDATE user 
+                                SET username = @Username,
+                                    email = @Email,
+                                    first_name = @FirstName,
+                                    last_name = @LastName,
+                                    role_id = @RoleId
+                                WHERE user_id = @UserId";
 
-        public void UpdateUserInDatabase(UserModel user)
-        {
-            using (var connection = new MySqlConnection(Connection.ConnectionString))
-            {
-                try
-                {
-                    connection.Open();
-                    string query = @"UPDATE user 
-                SET username = @Username,
-                    password_hash = @PasswordHash,
-                    email = @Email,
-                    first_name = @FirstName,
-                    last_name = @LastName,
-                    role_id = @RoleId
-                WHERE user_id = @UserId";
+                        cmd = new MySqlCommand(query, connection);
+                    }
 
-                    MySqlCommand cmd = new MySqlCommand(query, connection);
-                    cmd.Parameters.AddWithValue("@Username", user.username);
-                    cmd.Parameters.AddWithValue("@PasswordHash", user.password_hash);
-                    cmd.Parameters.AddWithValue("@Email", user.email);
-                    cmd.Parameters.AddWithValue("@FirstName", user.first_name);
-                    cmd.Parameters.AddWithValue("@LastName", user.last_name);
+                    cmd.Parameters.AddWithValue("@Username", user.username ?? "");
+                    cmd.Parameters.AddWithValue("@Email", user.email ?? "");
+                    cmd.Parameters.AddWithValue("@FirstName", user.first_name ?? "");
+                    cmd.Parameters.AddWithValue("@LastName", user.last_name ?? "");
                     cmd.Parameters.AddWithValue("@RoleId", user.role_id);
                     cmd.Parameters.AddWithValue("@UserId", user.user_id);
 
-                    cmd.ExecuteNonQuery();
-                    connection.Close();
+                    int affected = cmd.ExecuteNonQuery();
+                    return affected > 0;
                 }
                 catch (Exception ex)
                 {
                     MessageBox.Show($"Ошибка обновления пользователя: {ex.Message}");
+                    return false;
                 }
             }
         }
+
+        #endregion
+
+        #region Вспомогательные методы
+
+        public DataTable LoadCategories()
+        {
+            DataTable dt = new DataTable();
+            using (var connection = new MySqlConnection(Connection.ConnectionString))
+            {
+                try
+                {
+                    connection.Open();
+                    string query = "SELECT category_id, name FROM category ORDER BY name";
+                    MySqlDataAdapter adapter = new MySqlDataAdapter(query, connection);
+                    adapter.Fill(dt);
+
+                    // Добавляем пустую строку для возможности не выбирать категорию
+                    DataRow emptyRow = dt.NewRow();
+                    emptyRow["category_id"] = DBNull.Value;
+                    emptyRow["name"] = "— Без категории —";
+                    dt.Rows.InsertAt(emptyRow, 0);
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show($"Ошибка загрузки категорий: {ex.Message}");
+                }
+            }
+            return dt;
+        }
+
+        public DataTable LoadRoles()
+        {
+            DataTable dt = new DataTable();
+            using (var connection = new MySqlConnection(Connection.ConnectionString))
+            {
+                try
+                {
+                    connection.Open();
+                    string query = "SELECT role_id, role_name FROM role ORDER BY role_name";
+                    MySqlDataAdapter adapter = new MySqlDataAdapter(query, connection);
+                    adapter.Fill(dt);
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show($"Ошибка загрузки ролей: {ex.Message}");
+                }
+            }
+            return dt;
+        }
+
+        #endregion
     }
 }

@@ -41,9 +41,9 @@
             this.Count = new System.Windows.Forms.TextBox();
             this.Back = new System.Windows.Forms.Button();
             this.EditProduct = new System.Windows.Forms.Button();
-            this.pictureBoxProduct = new System.Windows.Forms.PictureBox();
             this.button1 = new System.Windows.Forms.Button();
             this.toolTip1 = new System.Windows.Forms.ToolTip(this.components);
+            this.pictureBoxProduct = new System.Windows.Forms.PictureBox();
             ((System.ComponentModel.ISupportInitialize)(this.pictureBoxProduct)).BeginInit();
             this.SuspendLayout();
             // 
@@ -63,6 +63,7 @@
             this.NameTB.Name = "NameTB";
             this.NameTB.Size = new System.Drawing.Size(292, 31);
             this.NameTB.TabIndex = 1;
+            this.NameTB.TextChanged += new System.EventHandler(this.NameTB_TextChanged);
             // 
             // CategoryCb
             // 
@@ -116,7 +117,6 @@
             this.Price.Size = new System.Drawing.Size(292, 31);
             this.Price.TabIndex = 7;
             this.Price.TextChanged += new System.EventHandler(this.Price_TextChanged);
-            this.Price.Leave += new System.EventHandler(this.Price_Leave);
             // 
             // Count
             // 
@@ -151,18 +151,6 @@
             this.EditProduct.UseVisualStyleBackColor = false;
             this.EditProduct.Click += new System.EventHandler(this.EditProduct_Click);
             // 
-            // pictureBoxProduct
-            // 
-            this.pictureBoxProduct.Location = new System.Drawing.Point(456, 13);
-            this.pictureBoxProduct.Name = "pictureBoxProduct";
-            this.pictureBoxProduct.Size = new System.Drawing.Size(265, 169);
-            this.pictureBoxProduct.TabIndex = 11;
-            this.pictureBoxProduct.TabStop = false;
-            this.pictureBoxProduct.Click += new System.EventHandler(this.pictureBoxProduct_Click);
-            this.pictureBoxProduct.DragDrop += new System.Windows.Forms.DragEventHandler(this.pictureBoxProduct_DragDrop);
-            this.pictureBoxProduct.DragEnter += new System.Windows.Forms.DragEventHandler(this.pictureBoxProduct_DragEnter);
-            this.pictureBoxProduct.MouseHover += new System.EventHandler(this.pictureBoxProduct_MouseHover);
-            // 
             // button1
             // 
             this.button1.BackColor = System.Drawing.Color.GreenYellow;
@@ -174,6 +162,18 @@
             this.button1.Text = "Обзор";
             this.button1.UseVisualStyleBackColor = false;
             this.button1.Click += new System.EventHandler(this.btnLoadImage_Click);
+            // 
+            // pictureBoxProduct
+            // 
+            this.pictureBoxProduct.Location = new System.Drawing.Point(456, 13);
+            this.pictureBoxProduct.Name = "pictureBoxProduct";
+            this.pictureBoxProduct.Size = new System.Drawing.Size(265, 169);
+            this.pictureBoxProduct.TabIndex = 11;
+            this.pictureBoxProduct.TabStop = false;
+            this.pictureBoxProduct.Click += new System.EventHandler(this.pictureBoxProduct_Click);
+            this.pictureBoxProduct.DragDrop += new System.Windows.Forms.DragEventHandler(this.pictureBoxProduct_DragDrop);
+            this.pictureBoxProduct.DragEnter += new System.Windows.Forms.DragEventHandler(this.pictureBoxProduct_DragEnter);
+            this.pictureBoxProduct.MouseHover += new System.EventHandler(this.pictureBoxProduct_MouseHover);
             // 
             // EditProductForm
             // 
@@ -195,6 +195,7 @@
             this.Controls.Add(this.NameTB);
             this.Controls.Add(this.label1);
             this.Font = new System.Drawing.Font("Microsoft Sans Serif", 14.25F);
+            this.FormBorderStyle = System.Windows.Forms.FormBorderStyle.FixedSingle;
             this.Icon = ((System.Drawing.Icon)(resources.GetObject("$this.Icon")));
             this.Margin = new System.Windows.Forms.Padding(6);
             this.MaximizeBox = false;

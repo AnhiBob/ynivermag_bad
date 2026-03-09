@@ -28,6 +28,8 @@
         /// </summary>
         private void InitializeComponent()
         {
+            this.components = new System.ComponentModel.Container();
+            System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(RecordsSellerForm));
             this.dataGridViewAllProducts = new System.Windows.Forms.DataGridView();
             this.dataGridViewOrderProducts = new System.Windows.Forms.DataGridView();
             this.label1 = new System.Windows.Forms.Label();
@@ -43,20 +45,31 @@
             this.button6 = new System.Windows.Forms.Button();
             this.label3 = new System.Windows.Forms.Label();
             this.button4 = new System.Windows.Forms.Button();
+            this.button7 = new System.Windows.Forms.Button();
+            this.toolTip1 = new System.Windows.Forms.ToolTip(this.components);
             ((System.ComponentModel.ISupportInitialize)(this.dataGridViewAllProducts)).BeginInit();
             ((System.ComponentModel.ISupportInitialize)(this.dataGridViewOrderProducts)).BeginInit();
             this.SuspendLayout();
             // 
             // dataGridViewAllProducts
             // 
+            this.dataGridViewAllProducts.AllowUserToAddRows = false;
+            this.dataGridViewAllProducts.AllowUserToDeleteRows = false;
+            this.dataGridViewAllProducts.AllowUserToResizeColumns = false;
+            this.dataGridViewAllProducts.AllowUserToResizeRows = false;
             this.dataGridViewAllProducts.ColumnHeadersHeightSizeMode = System.Windows.Forms.DataGridViewColumnHeadersHeightSizeMode.AutoSize;
             this.dataGridViewAllProducts.Location = new System.Drawing.Point(8, 114);
             this.dataGridViewAllProducts.Name = "dataGridViewAllProducts";
+            this.dataGridViewAllProducts.ReadOnly = true;
             this.dataGridViewAllProducts.Size = new System.Drawing.Size(798, 479);
             this.dataGridViewAllProducts.TabIndex = 0;
             // 
             // dataGridViewOrderProducts
             // 
+            this.dataGridViewOrderProducts.AllowUserToAddRows = false;
+            this.dataGridViewOrderProducts.AllowUserToDeleteRows = false;
+            this.dataGridViewOrderProducts.AllowUserToResizeColumns = false;
+            this.dataGridViewOrderProducts.AllowUserToResizeRows = false;
             this.dataGridViewOrderProducts.ColumnHeadersHeightSizeMode = System.Windows.Forms.DataGridViewColumnHeadersHeightSizeMode.AutoSize;
             this.dataGridViewOrderProducts.Location = new System.Drawing.Point(957, 114);
             this.dataGridViewOrderProducts.Name = "dataGridViewOrderProducts";
@@ -67,7 +80,7 @@
             // 
             this.label1.AutoSize = true;
             this.label1.Font = new System.Drawing.Font("Microsoft Sans Serif", 22.25F);
-            this.label1.Location = new System.Drawing.Point(587, 9);
+            this.label1.Location = new System.Drawing.Point(679, -1);
             this.label1.Name = "label1";
             this.label1.Size = new System.Drawing.Size(319, 36);
             this.label1.TabIndex = 2;
@@ -79,7 +92,6 @@
             this.txtSearch.Name = "txtSearch";
             this.txtSearch.Size = new System.Drawing.Size(412, 29);
             this.txtSearch.TabIndex = 3;
-            this.txtSearch.TextChanged += new System.EventHandler(this.txtSearch_TextChanged);
             // 
             // label2
             // 
@@ -112,22 +124,26 @@
             // 
             // button3
             // 
-            this.button3.Location = new System.Drawing.Point(8, 609);
+            this.button3.BackColor = System.Drawing.Color.GreenYellow;
+            this.button3.FlatStyle = System.Windows.Forms.FlatStyle.Popup;
+            this.button3.Location = new System.Drawing.Point(8, 599);
             this.button3.Name = "button3";
-            this.button3.Size = new System.Drawing.Size(139, 41);
+            this.button3.Size = new System.Drawing.Size(181, 51);
             this.button3.TabIndex = 7;
             this.button3.Text = "Назад";
-            this.button3.UseVisualStyleBackColor = true;
+            this.button3.UseVisualStyleBackColor = false;
             this.button3.Click += new System.EventHandler(this.InMenu_Click);
             // 
             // button5
             // 
-            this.button5.Location = new System.Drawing.Point(1544, 609);
+            this.button5.BackColor = System.Drawing.Color.LimeGreen;
+            this.button5.FlatStyle = System.Windows.Forms.FlatStyle.Popup;
+            this.button5.Location = new System.Drawing.Point(1544, 599);
             this.button5.Name = "button5";
-            this.button5.Size = new System.Drawing.Size(201, 41);
+            this.button5.Size = new System.Drawing.Size(201, 51);
             this.button5.TabIndex = 9;
             this.button5.Text = "Оформить заказ";
-            this.button5.UseVisualStyleBackColor = true;
+            this.button5.UseVisualStyleBackColor = false;
             this.button5.Click += new System.EventHandler(this.btnCreateOrder_Click);
             // 
             // FIOlabel
@@ -141,10 +157,11 @@
             // 
             // cmbClient
             // 
+            this.cmbClient.DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList;
             this.cmbClient.FormattingEnabled = true;
-            this.cmbClient.Location = new System.Drawing.Point(444, 66);
+            this.cmbClient.Location = new System.Drawing.Point(426, 66);
             this.cmbClient.Name = "cmbClient";
-            this.cmbClient.Size = new System.Drawing.Size(235, 32);
+            this.cmbClient.Size = new System.Drawing.Size(253, 32);
             this.cmbClient.TabIndex = 11;
             // 
             // lblTotalAmount
@@ -158,18 +175,20 @@
             // 
             // button6
             // 
-            this.button6.Location = new System.Drawing.Point(1399, 609);
+            this.button6.BackColor = System.Drawing.Color.LimeGreen;
+            this.button6.FlatStyle = System.Windows.Forms.FlatStyle.Popup;
+            this.button6.Location = new System.Drawing.Point(1399, 599);
             this.button6.Name = "button6";
-            this.button6.Size = new System.Drawing.Size(139, 41);
+            this.button6.Size = new System.Drawing.Size(139, 51);
             this.button6.TabIndex = 13;
             this.button6.Text = "Очистить";
-            this.button6.UseVisualStyleBackColor = true;
+            this.button6.UseVisualStyleBackColor = false;
             this.button6.Click += new System.EventHandler(this.btnClearOrder_Click);
             // 
             // label3
             // 
             this.label3.AutoSize = true;
-            this.label3.Location = new System.Drawing.Point(440, 39);
+            this.label3.Location = new System.Drawing.Point(422, 39);
             this.label3.Name = "label3";
             this.label3.Size = new System.Drawing.Size(75, 24);
             this.label3.TabIndex = 14;
@@ -185,12 +204,23 @@
             this.button4.UseVisualStyleBackColor = true;
             this.button4.Click += new System.EventHandler(this.btnAddClient_Click);
             // 
+            // button7
+            // 
+            this.button7.Location = new System.Drawing.Point(812, 66);
+            this.button7.Name = "button7";
+            this.button7.Size = new System.Drawing.Size(121, 32);
+            this.button7.TabIndex = 16;
+            this.button7.Text = "Выбрать";
+            this.button7.UseVisualStyleBackColor = true;
+            this.button7.Click += new System.EventHandler(this.button7_Click);
+            // 
             // RecordsSellerForm
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(11F, 24F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.BackColor = System.Drawing.Color.White;
             this.ClientSize = new System.Drawing.Size(1788, 673);
+            this.Controls.Add(this.button7);
             this.Controls.Add(this.button4);
             this.Controls.Add(this.label3);
             this.Controls.Add(this.button6);
@@ -207,7 +237,10 @@
             this.Controls.Add(this.dataGridViewOrderProducts);
             this.Controls.Add(this.dataGridViewAllProducts);
             this.Font = new System.Drawing.Font("Microsoft Sans Serif", 14.25F);
+            this.Icon = ((System.Drawing.Icon)(resources.GetObject("$this.Icon")));
             this.Margin = new System.Windows.Forms.Padding(6);
+            this.MaximizeBox = false;
+            this.MinimizeBox = false;
             this.Name = "RecordsSellerForm";
             this.StartPosition = System.Windows.Forms.FormStartPosition.CenterScreen;
             this.Text = "Оформление заказа";
@@ -236,5 +269,7 @@
         private System.Windows.Forms.Button button6;
         private System.Windows.Forms.Label label3;
         private System.Windows.Forms.Button button4;
+        private System.Windows.Forms.Button button7;
+        private System.Windows.Forms.ToolTip toolTip1;
     }
 }

@@ -45,7 +45,10 @@ namespace ynivermag_bad
             this.pictureBoxProduct = new System.Windows.Forms.PictureBox();
             this.button1 = new System.Windows.Forms.Button();
             this.toolTip1 = new System.Windows.Forms.ToolTip(this.components);
+            this.errorProvider1 = new System.Windows.Forms.ErrorProvider(this.components);
+            this.button2 = new System.Windows.Forms.Button();
             ((System.ComponentModel.ISupportInitialize)(this.pictureBoxProduct)).BeginInit();
+            ((System.ComponentModel.ISupportInitialize)(this.errorProvider1)).BeginInit();
             this.SuspendLayout();
             // 
             // Back
@@ -54,7 +57,7 @@ namespace ynivermag_bad
             this.Back.FlatStyle = System.Windows.Forms.FlatStyle.Popup;
             this.Back.Location = new System.Drawing.Point(28, 249);
             this.Back.Name = "Back";
-            this.Back.Size = new System.Drawing.Size(159, 40);
+            this.Back.Size = new System.Drawing.Size(194, 40);
             this.Back.TabIndex = 0;
             this.Back.Text = "Отмена";
             this.Back.UseVisualStyleBackColor = false;
@@ -64,9 +67,9 @@ namespace ynivermag_bad
             // 
             this.AddProduct.BackColor = System.Drawing.Color.GreenYellow;
             this.AddProduct.FlatStyle = System.Windows.Forms.FlatStyle.Popup;
-            this.AddProduct.Location = new System.Drawing.Point(332, 249);
+            this.AddProduct.Location = new System.Drawing.Point(314, 249);
             this.AddProduct.Name = "AddProduct";
-            this.AddProduct.Size = new System.Drawing.Size(159, 40);
+            this.AddProduct.Size = new System.Drawing.Size(177, 40);
             this.AddProduct.TabIndex = 1;
             this.AddProduct.Text = "Добавить";
             this.AddProduct.UseVisualStyleBackColor = false;
@@ -125,6 +128,7 @@ namespace ynivermag_bad
             this.NameTB.Name = "NameTB";
             this.NameTB.Size = new System.Drawing.Size(326, 31);
             this.NameTB.TabIndex = 7;
+            this.NameTB.Validating += new System.ComponentModel.CancelEventHandler(this.NameTB_Validating);
             // 
             // Price
             // 
@@ -134,6 +138,8 @@ namespace ynivermag_bad
             this.Price.Size = new System.Drawing.Size(326, 31);
             this.Price.TabIndex = 8;
             this.Price.TextChanged += new System.EventHandler(this.Price_TextChanged);
+            this.Price.KeyPress += new System.Windows.Forms.KeyPressEventHandler(this.Price_KeyPress);
+            this.Price.Leave += new System.EventHandler(this.Price_Leave);
             // 
             // Count
             // 
@@ -142,6 +148,7 @@ namespace ynivermag_bad
             this.Count.Name = "Count";
             this.Count.Size = new System.Drawing.Size(326, 31);
             this.Count.TabIndex = 9;
+            this.Count.KeyPress += new System.Windows.Forms.KeyPressEventHandler(this.Count_KeyPress);
             // 
             // CategoryCb
             // 
@@ -175,12 +182,29 @@ namespace ynivermag_bad
             this.button1.UseVisualStyleBackColor = false;
             this.button1.Click += new System.EventHandler(this.btnLoadImage_Click);
             // 
+            // errorProvider1
+            // 
+            this.errorProvider1.ContainerControl = this;
+            // 
+            // button2
+            // 
+            this.button2.BackColor = System.Drawing.Color.GreenYellow;
+            this.button2.FlatStyle = System.Windows.Forms.FlatStyle.Popup;
+            this.button2.Location = new System.Drawing.Point(509, 225);
+            this.button2.Name = "button2";
+            this.button2.Size = new System.Drawing.Size(240, 32);
+            this.button2.TabIndex = 13;
+            this.button2.Text = "Очистить";
+            this.button2.UseVisualStyleBackColor = false;
+            this.button2.Click += new System.EventHandler(this.btnClearImage_Click);
+            // 
             // AddProductForm
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(11F, 24F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.BackColor = System.Drawing.Color.White;
             this.ClientSize = new System.Drawing.Size(761, 313);
+            this.Controls.Add(this.button2);
             this.Controls.Add(this.button1);
             this.Controls.Add(this.pictureBoxProduct);
             this.Controls.Add(this.CategoryCb);
@@ -195,12 +219,16 @@ namespace ynivermag_bad
             this.Controls.Add(this.AddProduct);
             this.Controls.Add(this.Back);
             this.Font = new System.Drawing.Font("Microsoft Sans Serif", 14.25F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(204)));
+            this.FormBorderStyle = System.Windows.Forms.FormBorderStyle.FixedSingle;
             this.Icon = ((System.Drawing.Icon)(resources.GetObject("$this.Icon")));
             this.Margin = new System.Windows.Forms.Padding(6);
+            this.MaximizeBox = false;
+            this.MinimizeBox = false;
             this.Name = "AddProductForm";
             this.StartPosition = System.Windows.Forms.FormStartPosition.CenterScreen;
             this.Text = "Добавление Товара";
             ((System.ComponentModel.ISupportInitialize)(this.pictureBoxProduct)).EndInit();
+            ((System.ComponentModel.ISupportInitialize)(this.errorProvider1)).EndInit();
             this.ResumeLayout(false);
             this.PerformLayout();
 
@@ -222,5 +250,7 @@ namespace ynivermag_bad
         private System.Windows.Forms.PictureBox pictureBoxProduct;
         private System.Windows.Forms.Button button1;
         private System.Windows.Forms.ToolTip toolTip1;
+        private System.Windows.Forms.ErrorProvider errorProvider1;
+        private System.Windows.Forms.Button button2;
     }
 }

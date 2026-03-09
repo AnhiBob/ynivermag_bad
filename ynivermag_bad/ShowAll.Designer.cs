@@ -110,12 +110,16 @@
             // 
             // dataGridViewClient
             // 
+            this.dataGridViewClient.AllowUserToAddRows = false;
+            this.dataGridViewClient.AllowUserToDeleteRows = false;
+            this.dataGridViewClient.AllowUserToResizeColumns = false;
+            this.dataGridViewClient.AllowUserToResizeRows = false;
             this.dataGridViewClient.ColumnHeadersHeightSizeMode = System.Windows.Forms.DataGridViewColumnHeadersHeightSizeMode.AutoSize;
             this.dataGridViewClient.Location = new System.Drawing.Point(7, 7);
             this.dataGridViewClient.Name = "dataGridViewClient";
+            this.dataGridViewClient.ReadOnly = true;
             this.dataGridViewClient.Size = new System.Drawing.Size(1042, 457);
             this.dataGridViewClient.TabIndex = 5;
-            this.dataGridViewClient.MouseClick += new System.Windows.Forms.MouseEventHandler(this.dataGridViewClient_MouseClick);
             // 
             // InMenuClient
             // 
@@ -168,14 +172,16 @@
             // 
             // dataGridViewProduct
             // 
+            this.dataGridViewProduct.AllowUserToAddRows = false;
+            this.dataGridViewProduct.AllowUserToDeleteRows = false;
+            this.dataGridViewProduct.AllowUserToResizeColumns = false;
+            this.dataGridViewProduct.AllowUserToResizeRows = false;
             this.dataGridViewProduct.ColumnHeadersHeightSizeMode = System.Windows.Forms.DataGridViewColumnHeadersHeightSizeMode.AutoSize;
             this.dataGridViewProduct.Location = new System.Drawing.Point(7, 7);
             this.dataGridViewProduct.Name = "dataGridViewProduct";
+            this.dataGridViewProduct.ReadOnly = true;
             this.dataGridViewProduct.Size = new System.Drawing.Size(1042, 457);
             this.dataGridViewProduct.TabIndex = 0;
-            this.dataGridViewProduct.CellFormatting += new System.Windows.Forms.DataGridViewCellFormattingEventHandler(this.dataGridViewProduct_CellFormatting);
-            this.dataGridViewProduct.MouseClick += new System.Windows.Forms.MouseEventHandler(this.dataGridViewProduct_MouseClick);
-            this.dataGridViewProduct.Resize += new System.EventHandler(this.dataGridViewProduct_Resize);
             // 
             // tabPage3
             // 
@@ -215,12 +221,16 @@
             // 
             // dataGridViewUser
             // 
+            this.dataGridViewUser.AllowUserToAddRows = false;
+            this.dataGridViewUser.AllowUserToDeleteRows = false;
+            this.dataGridViewUser.AllowUserToResizeColumns = false;
+            this.dataGridViewUser.AllowUserToResizeRows = false;
             this.dataGridViewUser.ColumnHeadersHeightSizeMode = System.Windows.Forms.DataGridViewColumnHeadersHeightSizeMode.AutoSize;
             this.dataGridViewUser.Location = new System.Drawing.Point(7, 7);
             this.dataGridViewUser.Name = "dataGridViewUser";
+            this.dataGridViewUser.ReadOnly = true;
             this.dataGridViewUser.Size = new System.Drawing.Size(1042, 457);
             this.dataGridViewUser.TabIndex = 0;
-            this.dataGridViewUser.MouseClick += new System.Windows.Forms.MouseEventHandler(this.dataGridViewUser_MouseClick);
             // 
             // ShowAll
             // 
@@ -232,6 +242,7 @@
             this.Controls.Add(this.FIOlb);
             this.Controls.Add(this.label1);
             this.Font = new System.Drawing.Font("Microsoft Sans Serif", 14.25F);
+            this.FormBorderStyle = System.Windows.Forms.FormBorderStyle.FixedSingle;
             this.Icon = ((System.Drawing.Icon)(resources.GetObject("$this.Icon")));
             this.Margin = new System.Windows.Forms.Padding(6);
             this.MaximizeBox = false;
