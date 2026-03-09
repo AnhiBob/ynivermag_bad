@@ -11,52 +11,98 @@ using System.Windows.Forms;
 
 namespace ynivermag_bad
 {
+    /// <summary>
+    /// Форма для поиска и выбора клиента.
+    /// Используется в форме оформления заказа для быстрого поиска клиента
+    /// по различным критериям (фамилия, имя, телефон, email).
+    /// </summary>
     public partial class SearchClient : Form
     {
+        // ============ ПОЛЯ КЛАССА ============
+
+        /// <summary>
+        /// Строка подключения к базе данных
+        /// </summary>
         private string _connection;
+
+        /// <summary>
+        /// Таблица со всеми клиентами, загруженная из БД
+        /// </summary>
         private DataTable _clientsTable;
+
+        /// <summary>
+        /// Флаг для предотвращения рекурсивного обновления поля поиска
+        /// </summary>
         private bool _isUpdatingSearch = false;
 
-        // Свойство для возврата выбранного клиента
+        // ============ СВОЙСТВА ДЛЯ ВОЗВРАТА РЕЗУЛЬТАТА ============
+
+        /// <summary>
+        /// ID выбранного клиента (возвращается в вызывающую форму)
+        /// </summary>
         public int SelectedClientId { get; private set; } = -1;
+
+        /// <summary>
+        /// ФИО выбранного клиента (возвращается в вызывающую форму)
+        /// </summary>
         public string SelectedClientName { get; private set; } = "";
 
+        // ============ КОНСТРУКТОР ============
+
+        /// <summary>
+        /// Конструктор формы поиска клиента
+        /// </summary>
         public SearchClient()
         {
             InitializeComponent();
             _connection = Connection.ConnectionString;
 
-            // Настройка формы
+            // Настройка внешнего вида формы
             this.Text = "Поиск клиента";
-            this.StartPosition = FormStartPosition.CenterParent;
-            this.MinimizeBox = false;
-            this.MaximizeBox = false;
+            this.StartPosition = FormStartPosition.CenterParent; // По центру родительской формы
+            this.MinimizeBox = false;      // Запрещаем сворачивание
+            this.MaximizeBox = false;       // Запрещаем разворачивание
 
-            // Настройка DataGridView
+            // Настройка таблицы
             SetupDataGridView();
 
-            // Загрузка клиентов
+            // Загрузка данных
             LoadClients();
 
             // Подписка на события
+            SubscribeToEvents();
+
+            // Подсказка для поля поиска
+            toolTip1.SetToolTip(txtSearch, "Поиск по фамилии, имени, телефону или email (буквы, цифры, пробел, дефис, @, .)");
+        }
+
+        // ============ ПОДПИСКА НА СОБЫТИЯ ============
+
+        /// <summary>
+        /// Подписывается на все необходимые события формы
+        /// </summary>
+        private void SubscribeToEvents()
+        {
             txtSearch.TextChanged += TxtSearch_TextChanged;
-            txtSearch.KeyPress += TxtSearch_KeyPress; // ДОБАВЛЕНО: фильтрация ввода
+            txtSearch.KeyPress += TxtSearch_KeyPress;
             dataGridViewClients.CellDoubleClick += DataGridViewClients_CellDoubleClick;
             dataGridViewClients.KeyDown += DataGridViewClients_KeyDown;
             btnSelect.Click += BtnSelect_Click;
             btnCancel.Click += BtnCancel_Click;
-
-            // Подсказка для поля поиска
-            toolTip1.SetToolTip(txtSearch, "Поиск по фамилии, имени, телефону или email (буквы, цифры, пробел, дефис)");
         }
 
+        // ============ НАСТРОЙКА ТАБЛИЦЫ ============
+
+        /// <summary>
+        /// Настраивает внешний вид и колонки DataGridView
+        /// </summary>
         private void SetupDataGridView()
         {
             dataGridViewClients.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
-            dataGridViewClients.MultiSelect = false;
-            dataGridViewClients.ReadOnly = true;
-            dataGridViewClients.RowHeadersVisible = false;
-            dataGridViewClients.AllowUserToAddRows = false;
+            dataGridViewClients.MultiSelect = false;           // Запрещаем множественный выбор
+            dataGridViewClients.ReadOnly = true;                // Только для чтения
+            dataGridViewClients.RowHeadersVisible = false;      // Скрываем заголовки строк
+            dataGridViewClients.AllowUserToAddRows = false;     // Запрещаем добавление строк
             dataGridViewClients.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
 
             // Добавляем колонки
@@ -67,19 +113,24 @@ namespace ynivermag_bad
             dataGridViewClients.Columns.Add("email", "Email");
 
             // Настройка колонок
-            dataGridViewClients.Columns["client_id"].Visible = false;
+            dataGridViewClients.Columns["client_id"].Visible = false; // Скрываем ID
             dataGridViewClients.Columns["last_name"].Width = 150;
             dataGridViewClients.Columns["first_name"].Width = 150;
             dataGridViewClients.Columns["phone"].Width = 120;
             dataGridViewClients.Columns["email"].Width = 180;
 
-            // Подсветка строк при наведении
+            // Стили оформления
             dataGridViewClients.RowsDefaultCellStyle.BackColor = Color.White;
             dataGridViewClients.AlternatingRowsDefaultCellStyle.BackColor = Color.FromArgb(240, 240, 240);
-            dataGridViewClients.DefaultCellStyle.SelectionBackColor = Color.FromArgb(76, 175, 80);
+            dataGridViewClients.DefaultCellStyle.SelectionBackColor = Color.FromArgb(76, 175, 80); // Зеленый
             dataGridViewClients.DefaultCellStyle.SelectionForeColor = Color.White;
         }
 
+        // ============ ЗАГРУЗКА ДАННЫХ ============
+
+        /// <summary>
+        /// Загружает список всех активных клиентов из базы данных
+        /// </summary>
         private void LoadClients()
         {
             try
@@ -114,6 +165,10 @@ namespace ynivermag_bad
             }
         }
 
+        /// <summary>
+        /// Отображает список клиентов в таблице с форматированием телефона
+        /// </summary>
+        /// <param name="clients">DataTable с данными клиентов</param>
         private void DisplayClients(DataTable clients)
         {
             dataGridViewClients.Rows.Clear();
@@ -129,40 +184,49 @@ namespace ynivermag_bad
                 );
             }
 
+            // Выбираем первую строку по умолчанию
             if (dataGridViewClients.Rows.Count > 0)
             {
                 dataGridViewClients.Rows[0].Selected = true;
             }
         }
 
+        /// <summary>
+        /// Форматирует номер телефона для красивого отображения
+        /// </summary>
+        /// <param name="phone">Исходный номер телефона</param>
+        /// <returns>Отформатированный номер</returns>
         private string FormatPhone(string phone)
         {
             if (string.IsNullOrEmpty(phone))
                 return "";
 
-            // Простое форматирование для отображения
+            // Извлекаем только цифры
             string digitsOnly = new string(phone.Where(char.IsDigit).ToArray());
 
+            // Форматируем в зависимости от формата
             if (digitsOnly.Length == 11 && digitsOnly.StartsWith("7"))
             {
+                // +7 XXX XXX-XX-XX
                 return $"+7 ({digitsOnly.Substring(1, 3)}) {digitsOnly.Substring(4, 3)}-{digitsOnly.Substring(7, 2)}-{digitsOnly.Substring(9, 2)}";
             }
             else if (digitsOnly.Length == 11 && digitsOnly.StartsWith("8"))
             {
+                // 8 XXX XXX-XX-XX
                 return $"8 ({digitsOnly.Substring(1, 3)}) {digitsOnly.Substring(4, 3)}-{digitsOnly.Substring(7, 2)}-{digitsOnly.Substring(9, 2)}";
             }
 
-            return phone;
+            return phone; // Возвращаем как есть, если формат не распознан
         }
 
-        #region Фильтрация ввода в поле поиска
+        // ============ ФИЛЬТРАЦИЯ ВВОДА В ПОЛЕ ПОИСКА ============
 
         /// <summary>
         /// Фильтрация ввода в поле поиска - разрешаем только буквы, цифры, пробел, дефис, @ и . (для email)
         /// </summary>
         private void TxtSearch_KeyPress(object sender, KeyPressEventArgs e)
         {
-            // Разрешаем backspace
+            // Разрешаем backspace (управляющие символы)
             if (char.IsControl(e.KeyChar))
                 return;
 
@@ -175,11 +239,10 @@ namespace ynivermag_bad
 
             if (!isValid)
             {
-                e.Handled = true;
+                e.Handled = true; // Блокируем ввод
 
                 // Показываем подсказку при попытке ввести спецсимвол
-                TextBox textBox = sender as TextBox;
-                if (textBox != null)
+                if (sender is TextBox textBox)
                 {
                     toolTip1.Show("Разрешены только буквы, цифры, пробел, дефис, @ и .",
                         textBox, 0, -20, 1500);
@@ -188,7 +251,7 @@ namespace ynivermag_bad
         }
 
         /// <summary>
-        /// Фильтрация ввода в поле поиска (дополнительная проверка при вставке)
+        /// Фильтрация ввода в поле поиска (дополнительная проверка при вставке из буфера)
         /// </summary>
         private void TxtSearch_TextChanged(object sender, EventArgs e)
         {
@@ -198,8 +261,8 @@ namespace ynivermag_bad
 
             try
             {
-                TextBox textBox = sender as TextBox;
-                if (textBox != null)
+                // Фильтруем текст при вставке из буфера обмена
+                if (sender is TextBox textBox)
                 {
                     int selectionStart = textBox.SelectionStart;
                     string filteredText = FilterSearchText(textBox.Text);
@@ -223,6 +286,8 @@ namespace ynivermag_bad
         /// <summary>
         /// Фильтр для текста поиска - оставляем только буквы, цифры, пробел, дефис, @ и .
         /// </summary>
+        /// <param name="input">Входная строка</param>
+        /// <returns>Отфильтрованная строка</returns>
         private string FilterSearchText(string input)
         {
             if (string.IsNullOrEmpty(input)) return input;
@@ -230,13 +295,14 @@ namespace ynivermag_bad
             return new string(input.Where(c =>
                 char.IsLetterOrDigit(c) ||  // Буквы и цифры
                 c == ' ' ||                  // Пробел
-                c == '-' ||                  // Дефис
+                c == '-' ||                  // Дефис (для фамилий)
                 c == '@' ||                  // @ для email
                 c == '.').ToArray());        // Точка для email
         }
 
         /// <summary>
         /// Выполнение поиска по отфильтрованному тексту
+        /// Ищет совпадения в фамилии, имени, телефоне и email
         /// </summary>
         private void PerformSearch()
         {
@@ -269,7 +335,7 @@ namespace ynivermag_bad
 
                 if (match)
                 {
-                    filteredTable.ImportRow(row);
+                    filteredTable.ImportRow(row); // Копируем строку в отфильтрованную таблицу
                 }
             }
 
@@ -277,8 +343,13 @@ namespace ynivermag_bad
             lblFoundCount.Text = $"Найдено: {filteredTable.Rows.Count}";
         }
 
-        #endregion
 
+
+        // ============ ВЫБОР КЛИЕНТА ============
+
+        /// <summary>
+        /// Обработчик двойного клика по строке таблицы
+        /// </summary>
         private void DataGridViewClients_CellDoubleClick(object sender, DataGridViewCellEventArgs e)
         {
             if (e.RowIndex >= 0)
@@ -287,13 +358,17 @@ namespace ynivermag_bad
             }
         }
 
+        /// <summary>
+        /// Обработчик нажатия клавиш в таблице
+        /// Enter - выбор клиента, Escape - отмена
+        /// </summary>
         private void DataGridViewClients_KeyDown(object sender, KeyEventArgs e)
         {
             if (e.KeyCode == Keys.Enter)
             {
                 SelectCurrentClient();
                 e.Handled = true;
-                e.SuppressKeyPress = true;
+                e.SuppressKeyPress = true; // Предотвращаем звуковой сигнал
             }
             else if (e.KeyCode == Keys.Escape)
             {
@@ -302,17 +377,26 @@ namespace ynivermag_bad
             }
         }
 
+        /// <summary>
+        /// Обработчик кнопки "Выбрать"
+        /// </summary>
         private void BtnSelect_Click(object sender, EventArgs e)
         {
             SelectCurrentClient();
         }
 
+        /// <summary>
+        /// Обработчик кнопки "Отмена"
+        /// </summary>
         private void BtnCancel_Click(object sender, EventArgs e)
         {
             this.DialogResult = DialogResult.Cancel;
             this.Close();
         }
 
+        /// <summary>
+        /// Выбирает текущего клиента и закрывает форму с результатом OK
+        /// </summary>
         private void SelectCurrentClient()
         {
             if (dataGridViewClients.SelectedRows.Count > 0)
@@ -335,6 +419,10 @@ namespace ynivermag_bad
             }
         }
 
+        /// <summary>
+        /// Находит и выделяет клиента по ID (используется после добавления нового клиента)
+        /// </summary>
+        /// <param name="clientId">ID клиента для выделения</param>
         private void FindAndSelectClient(int clientId)
         {
             foreach (DataGridViewRow row in dataGridViewClients.Rows)
@@ -342,13 +430,15 @@ namespace ynivermag_bad
                 if (Convert.ToInt32(row.Cells["client_id"].Value) == clientId)
                 {
                     row.Selected = true;
-                    dataGridViewClients.FirstDisplayedScrollingRowIndex = row.Index;
+                    dataGridViewClients.FirstDisplayedScrollingRowIndex = row.Index; // Прокручиваем до строки
                     break;
                 }
             }
         }
 
-        // Дополнительный метод для очистки поиска
+        /// <summary>
+        /// Очистка поля поиска
+        /// </summary>
         private void btnClearSearch_Click(object sender, EventArgs e)
         {
             txtSearch.Clear();

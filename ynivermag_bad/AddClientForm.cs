@@ -12,14 +12,45 @@ using static System.Windows.Forms.VisualStyles.VisualStyleElement;
 
 namespace ynivermag_bad
 {
+    /// <summary>
+    /// Форма для добавления нового клиента в систему.
+    /// Обеспечивает ввод и валидацию всех необходимых данных о клиенте:
+    /// - ФИО (только русские буквы)
+    /// - Email (только латиница, проверка уникальности)
+    /// - Телефон (автоформатирование, проверка уникальности)
+    /// - Адрес (свободный ввод с ограничениями)
+    /// </summary>
     public partial class AddClientForm : Form
     {
+        /// <summary>
+        /// ID только что добавленного клиента (возвращается после успешного сохранения)
+        /// </summary>
         public int NewClientId { get; private set; } = -1;
-        private string _connection;
-        public ClientModel NewClient { get; private set; }
-        public int AddedClientId { get; private set; }
-        private ShowAll _showForm; // Ссылка на форму ShowAll для обновления и проверок
 
+        /// <summary>
+        /// Строка подключения к базе данных
+        /// </summary>
+        private string _connection;
+
+        /// <summary>
+        /// Модель данных нового клиента
+        /// </summary>
+        public ClientModel NewClient { get; private set; }
+
+        /// <summary>
+        /// ID добавленного клиента (альтернативное свойство)
+        /// </summary>
+        public int AddedClientId { get; private set; }
+
+        /// <summary>
+        /// Ссылка на родительскую форму ShowAll для обновления данных
+        /// </summary>
+        private ShowAll _showForm;
+
+        /// <summary>
+        /// Конструктор формы добавления клиента
+        /// </summary>
+        /// <param name="showForm">Ссылка на форму ShowAll (может быть null)</param>
         public AddClientForm(ShowAll showForm = null)
         {
             InitializeComponent();
@@ -27,7 +58,8 @@ namespace ynivermag_bad
             _showForm = showForm;
             NewClient = new ClientModel();
 
-            // Подписываемся на события для фильтрации ввода
+            // Подписываемся на события для фильтрации ввода в реальном времени
+            // Это позволяет сразу отсеивать недопустимые символы
             FirstNameTextBox.TextChanged += FirstNameTextBox_TextChanged;
             LastNameTextBox.TextChanged += LastNameTextBox_TextChanged;
             EmailTextBox.TextChanged += EmailTextBox_TextChanged;
@@ -35,14 +67,20 @@ namespace ynivermag_bad
             AddressTextBox.TextChanged += AddressTextBox_TextChanged;
 
             // Подписываемся на события валидации при потере фокуса
+            // Нужно для финального форматирования (например, заглавные буквы в имени)
             PhoneMaskedTextBox.Leave += PhoneMaskedTextBox_Leave;
         }
 
         #region Вспомогательные методы для работы с телефоном
 
         /// <summary>
-        /// Получает только цифры из текста
+        /// Извлекает только цифры из строки, отбрасывая все остальные символы
         /// </summary>
+        /// <param name="text">Исходный текст (может содержать форматирование)</param>
+        /// <returns>Строка, содержащая только цифры</returns>
+        /// <example>
+        /// Вход: "+7 (123) 456-78-90" -> Выход: "71234567890"
+        /// </example>
         private string GetPhoneDigits(string text)
         {
             if (string.IsNullOrWhiteSpace(text)) return "";
@@ -50,13 +88,18 @@ namespace ynivermag_bad
         }
 
         /// <summary>
-        /// Получает чистый номер телефона (только 10 цифр)
+        /// Получает чистый 10-значный номер телефона (без кода страны)
         /// </summary>
+        /// <returns>10 цифр номера или пустая строка, если номер некорректен</returns>
+        /// <remarks>
+        /// Если введено 11 цифр и первая 7 или 8 (код России), то первая цифра отбрасывается.
+        /// Пример: "+7 (912) 345-67-89" -> "9123456789"
+        /// </remarks>
         private string GetCleanPhoneNumber()
         {
             string digits = GetPhoneDigits(PhoneMaskedTextBox.Text);
 
-            // Если цифр 11 и первая 7 или 8, убираем первую
+            // Если цифр 11 и первая 7 или 8, убираем первую (код страны)
             if (digits.Length == 11 && (digits[0] == '7' || digits[0] == '8'))
             {
                 digits = digits.Substring(1);
@@ -66,8 +109,14 @@ namespace ynivermag_bad
         }
 
         /// <summary>
-        /// Форматирование номера телефона для отображения
+        /// Форматирует номер телефона для отображения в красивом виде
         /// </summary>
+        /// <param name="phoneDigits">Цифры номера (10 или 11 цифр)</param>
+        /// <returns>Отформатированный номер телефона</returns>
+        /// <example>
+        /// Вход: "9123456789" -> Выход: "+7 (912) 345-67-89"
+        /// Вход: "89123456789" -> Выход: "+7 (912) 345-67-89"
+        /// </example>
         private string FormatPhoneForDisplay(string phoneDigits)
         {
             if (phoneDigits.Length == 11 && (phoneDigits.StartsWith("7") || phoneDigits.StartsWith("8")))
@@ -83,8 +132,16 @@ namespace ynivermag_bad
         }
 
         /// <summary>
-        /// Корректировка позиции курсора после форматирования телефона
+        /// Корректирует позицию курсора после автоматического форматирования телефона
         /// </summary>
+        /// <param name="originalPosition">Исходная позиция курсора</param>
+        /// <param name="oldText">Старый текст до форматирования</param>
+        /// <param name="newText">Новый текст после форматирования</param>
+        /// <returns>Скорректированная позиция курсора</returns>
+        /// <remarks>
+        /// Необходимо, чтобы при вводе цифр курсор не "прыгал" из-за добавленных форматирующих символов
+        /// (скобок, дефисов, пробелов).
+        /// </remarks>
         private int GetAdjustedCursorPosition(int originalPosition, string oldText, string newText)
         {
             if (originalPosition >= oldText.Length)
@@ -109,7 +166,8 @@ namespace ynivermag_bad
         #region Фильтрация ввода (только русские буквы)
 
         /// <summary>
-        /// Фильтрация ввода в поле имени (только русские буквы, дефис, пробел)
+        /// Обработчик изменения текста в поле имени.
+        /// Фильтрует ввод, оставляя только русские буквы, дефис и пробел.
         /// </summary>
         private void FirstNameTextBox_TextChanged(object sender, EventArgs e)
         {
@@ -124,7 +182,8 @@ namespace ynivermag_bad
         }
 
         /// <summary>
-        /// Фильтрация ввода в поле фамилии (только русские буквы, дефис, пробел)
+        /// Обработчик изменения текста в поле фамилии.
+        /// Фильтрует ввод, оставляя только русские буквы, дефис и пробел.
         /// </summary>
         private void LastNameTextBox_TextChanged(object sender, EventArgs e)
         {
@@ -139,8 +198,18 @@ namespace ynivermag_bad
         }
 
         /// <summary>
-        /// Фильтр только для русских букв, дефиса и пробела
+        /// Фильтрует строку, оставляя только русские буквы, дефис и пробел.
         /// </summary>
+        /// <param name="input">Входная строка</param>
+        /// <returns>Отфильтрованная строка, содержащая только разрешенные символы</returns>
+        /// <remarks>
+        /// Разрешены:
+        /// - Заглавные русские буквы (А-Я)
+        /// - Строчные русские буквы (а-я)
+        /// - Буквы Ё и ё
+        /// - Дефис (-)
+        /// - Пробел ( )
+        /// </remarks>
         private string FilterToRussianLetters(string input)
         {
             if (string.IsNullOrEmpty(input)) return input;
@@ -160,7 +229,8 @@ namespace ynivermag_bad
         }
 
         /// <summary>
-        /// Альтернативный вариант с использованием char.IsLetter и проверкой диапазона
+        /// Альтернативный метод фильтрации с использованием Unicode категорий.
+        /// Более универсальный, но немного медленнее.
         /// </summary>
         private string FilterToRussianLettersAlt(string input)
         {
@@ -182,7 +252,8 @@ namespace ynivermag_bad
         }
 
         /// <summary>
-        /// Автоматическое форматирование номера телефона при вводе
+        /// Автоматическое форматирование номера телефона при вводе.
+        /// Фильтрует только цифры и форматирует их в стандартный вид +7 (XXX) XXX-XX-XX.
         /// </summary>
         private void PhoneMaskedTextBox_TextChanged(object sender, EventArgs e)
         {
@@ -214,11 +285,19 @@ namespace ynivermag_bad
                 CheckForInactiveClientHint();
             }
         }
-        //
 
         /// <summary>
-        /// Форматирование номера телефона
+        /// Форматирует последовательность цифр в номер телефона.
         /// </summary>
+        /// <param name="digits">Цифры номера</param>
+        /// <returns>Отформатированный номер</returns>
+        /// <example>
+        /// "7" -> "+7"
+        /// "7912" -> "+7 (912"
+        /// "7912345" -> "+7 (912) 345"
+        /// "7912345678" -> "+7 (912) 345-67-8"
+        /// "79123456789" -> "+7 (912) 345-67-89"
+        /// </example>
         private string FormatPhoneNumber(string digits)
         {
             if (string.IsNullOrEmpty(digits))
@@ -257,7 +336,8 @@ namespace ynivermag_bad
         }
 
         /// <summary>
-        /// Фильтрация email (только латинские буквы, цифры и разрешенные символы)
+        /// Фильтрация email: оставляет только латинские буквы, цифры и разрешенные спецсимволы.
+        /// Также автоматически приводит к нижнему регистру.
         /// </summary>
         private void EmailTextBox_TextChanged(object sender, EventArgs e)
         {
@@ -267,7 +347,7 @@ namespace ynivermag_bad
             // Фильтруем только допустимые символы для email
             string filteredText = FilterToEmailChars(text);
 
-            // Приводим к нижнему регистру
+            // Приводим к нижнему регистру (email регистронезависим)
             filteredText = filteredText.ToLower();
 
             if (filteredText != text)
@@ -279,8 +359,14 @@ namespace ynivermag_bad
         }
 
         /// <summary>
-        /// Фильтр для email: ТОЛЬКО латинские буквы, цифры и разрешенные спецсимволы
+        /// Фильтр для email: оставляет только латинские буквы, цифры и разрешенные спецсимволы.
         /// </summary>
+        /// <param name="input">Входная строка</param>
+        /// <returns>Строка, содержащая только допустимые для email символы</returns>
+        /// <remarks>
+        /// Спецификация RFC разрешает множество символов в email.
+        /// Мы используем упрощенный набор для практичности.
+        /// </remarks>
         private string FilterToEmailChars(string input)
         {
             if (string.IsNullOrEmpty(input)) return input;
@@ -308,7 +394,7 @@ namespace ynivermag_bad
         }
 
         /// <summary>
-        /// Альтернативный простой вариант - если нужны только самые основные символы
+        /// Упрощенный фильтр для email (только самые основные символы).
         /// </summary>
         private string FilterToEmailCharsSimple(string input)
         {
@@ -324,9 +410,8 @@ namespace ynivermag_bad
                 c == '_').ToArray());        // подчеркивание
         }
 
-
         /// <summary>
-        /// Фильтрация адреса (буквы, цифры, пробелы, знаки препинания)
+        /// Фильтрация адреса: оставляет буквы, цифры, пробелы и основные знаки препинания.
         /// </summary>
         private void AddressTextBox_TextChanged(object sender, EventArgs e)
         {
@@ -341,8 +426,10 @@ namespace ynivermag_bad
         }
 
         /// <summary>
-        /// Фильтр для адреса: буквы, цифры, пробелы, знаки препинания
+        /// Фильтр для адреса: оставляет буквы, цифры, пробелы и знаки препинания.
         /// </summary>
+        /// <param name="input">Входная строка</param>
+        /// <returns>Отфильтрованная строка, безопасная для адреса</returns>
         private string FilterToAddressChars(string input)
         {
             if (string.IsNullOrEmpty(input)) return input;
@@ -350,8 +437,8 @@ namespace ynivermag_bad
             char[] allowedPunctuation = { '.', ',', '-', '/', '\\', ' ' };
 
             return new string(input.Where(c =>
-                char.IsLetterOrDigit(c) ||
-                allowedPunctuation.Contains(c)).ToArray());
+                char.IsLetterOrDigit(c) ||  // Любые буквы и цифры
+                allowedPunctuation.Contains(c)).ToArray()); // Разрешенные знаки препинания
         }
 
         #endregion
@@ -359,14 +446,20 @@ namespace ynivermag_bad
         #region Проверка существующего неактивного клиента
 
         /// <summary>
-        /// Проверка наличия неактивного клиента с введенным номером телефона
+        /// Проверяет, существует ли неактивный клиент с таким же номером телефона.
+        /// Если найден, показывает подсказку и меняет цвет поля.
         /// </summary>
+        /// <remarks>
+        /// Это не блокирующая проверка, а информационная подсказка для пользователя.
+        /// Позволяет избежать создания дубликатов, если клиент был ранее удален (помечен как неактивный).
+        /// </remarks>
         private void CheckForInactiveClientHint()
         {
             try
             {
                 string phoneDigits = GetPhoneDigits(PhoneMaskedTextBox.Text);
 
+                // Для подсказки нужно минимум 10 цифр
                 if (string.IsNullOrWhiteSpace(phoneDigits) || phoneDigits.Length < 10)
                     return;
 
@@ -391,12 +484,13 @@ namespace ynivermag_bad
                             // Изменяем цвет фона для подсказки
                             PhoneMaskedTextBox.BackColor = Color.LightYellow;
 
-                            // Можно добавить ToolTip
+                            // Добавляем ToolTip с информацией
                             toolTip1.SetToolTip(PhoneMaskedTextBox,
                                 $"Найден неактивный клиент: {lastName} {firstName}. Можно восстановить его через форму управления клиентами.");
                         }
                         else
                         {
+                            // Если неактивных клиентов нет, возвращаем обычный цвет
                             PhoneMaskedTextBox.BackColor = SystemColors.Window;
                             toolTip1.SetToolTip(PhoneMaskedTextBox, "");
                         }
@@ -405,7 +499,7 @@ namespace ynivermag_bad
             }
             catch
             {
-                // Игнорируем ошибки при проверке подсказки
+                // Игнорируем ошибки при проверке подсказки - это не критично
             }
         }
 
@@ -413,9 +507,12 @@ namespace ynivermag_bad
 
         #region Обработчики событий
 
+        /// <summary>
+        /// Обработчик потери фокуса полем телефона.
+        /// Очищает поле, если в нем нет цифр.
+        /// </summary>
         private void PhoneMaskedTextBox_Leave(object sender, EventArgs e)
         {
-            // Если поле пустое или содержит только форматирование, очищаем его
             string digits = GetPhoneDigits(PhoneMaskedTextBox.Text);
             if (string.IsNullOrWhiteSpace(digits))
             {
@@ -423,6 +520,10 @@ namespace ynivermag_bad
             }
         }
 
+        /// <summary>
+        /// Обработчик нажатия кнопки "Добавить".
+        /// Выполняет валидацию, сохранение данных и закрытие формы.
+        /// </summary>
         private void AddClient_Click(object sender, EventArgs e)
         {
             if (ValidateData())
@@ -436,6 +537,10 @@ namespace ynivermag_bad
             }
         }
 
+        /// <summary>
+        /// Обработчик кнопки "Назад"/"Отмена".
+        /// Проверяет наличие несохраненных изменений и предлагает их сохранить.
+        /// </summary>
         private void Back_Click(object sender, EventArgs e)
         {
             if (HasUnsavedChanges())
@@ -452,6 +557,10 @@ namespace ynivermag_bad
             Close();
         }
 
+        /// <summary>
+        /// Проверяет, есть ли несохраненные изменения в форме.
+        /// </summary>
+        /// <returns>true, если есть введенные данные</returns>
         private bool HasUnsavedChanges()
         {
             return !string.IsNullOrWhiteSpace(FirstNameTextBox.Text) ||
@@ -465,12 +574,17 @@ namespace ynivermag_bad
 
         #region Валидация перед сохранением
 
+        /// <summary>
+        /// Комплексная проверка всех полей перед сохранением.
+        /// Собирает все ошибки в список и показывает их одной группой.
+        /// </summary>
+        /// <returns>true, если все поля заполнены корректно</returns>
         private bool ValidateData()
         {
             // Собираем все ошибки в список
             List<string> errors = new List<string>();
 
-            // Проверка имени
+            // ===== ПРОВЕРКА ИМЕНИ =====
             if (string.IsNullOrWhiteSpace(FirstNameTextBox.Text))
             {
                 errors.Add("Введите имя клиента");
@@ -482,7 +596,7 @@ namespace ynivermag_bad
                 FirstNameTextBox.BackColor = Color.LightPink;
             }
 
-            // Проверка фамилии
+            // ===== ПРОВЕРКА ФАМИЛИИ =====
             if (string.IsNullOrWhiteSpace(LastNameTextBox.Text))
             {
                 errors.Add("Введите фамилию клиента");
@@ -494,7 +608,7 @@ namespace ynivermag_bad
                 LastNameTextBox.BackColor = Color.LightPink;
             }
 
-            // Проверка email
+            // ===== ПРОВЕРКА EMAIL =====
             if (string.IsNullOrWhiteSpace(EmailTextBox.Text))
             {
                 errors.Add("Введите email клиента");
@@ -511,7 +625,7 @@ namespace ynivermag_bad
                 EmailTextBox.BackColor = Color.LightPink;
             }
 
-            // Проверка телефона
+            // ===== ПРОВЕРКА ТЕЛЕФОНА =====
             if (string.IsNullOrWhiteSpace(PhoneMaskedTextBox.Text))
             {
                 errors.Add("Введите телефон клиента");
@@ -553,7 +667,7 @@ namespace ynivermag_bad
                 }
             }
 
-            // Проверка адреса (если заполнен)
+            // ===== ПРОВЕРКА АДРЕСА (необязательное поле) =====
             if (!string.IsNullOrWhiteSpace(AddressTextBox.Text) && AddressTextBox.Text.Length < 5)
             {
                 errors.Add("Адрес должен содержать минимум 5 символов");
@@ -573,6 +687,11 @@ namespace ynivermag_bad
             return true;
         }
 
+        /// <summary>
+        /// Проверяет корректность email-адреса.
+        /// </summary>
+        /// <param name="email">Проверяемый email</param>
+        /// <returns>true, если email корректен</returns>
         private bool IsValidEmail(string email)
         {
             if (string.IsNullOrWhiteSpace(email)) return false;
@@ -583,6 +702,7 @@ namespace ynivermag_bad
                 // Базовая проверка наличия @ и точки
                 if (!email.Contains('@') || !email.Contains('.')) return false;
 
+                // Используем встроенный класс MailAddress для полной проверки
                 var addr = new System.Net.Mail.MailAddress(email);
                 return addr.Address == email;
             }
@@ -592,6 +712,11 @@ namespace ynivermag_bad
             }
         }
 
+        /// <summary>
+        /// Проверяет уникальность email в базе данных.
+        /// </summary>
+        /// <param name="email">Проверяемый email</param>
+        /// <returns>true, если email уникален (не существует в БД)</returns>
         private bool IsEmailUnique(string email)
         {
             try
@@ -617,6 +742,11 @@ namespace ynivermag_bad
             }
         }
 
+        /// <summary>
+        /// Проверяет существование активного клиента с указанным номером телефона.
+        /// </summary>
+        /// <param name="phoneDigits">10 цифр номера (без кода)</param>
+        /// <returns>true, если клиент с таким телефоном уже существует и активен</returns>
         private bool IsActiveClientExists(string phoneDigits)
         {
             try
@@ -644,6 +774,10 @@ namespace ynivermag_bad
 
         #region Сохранение данных
 
+        /// <summary>
+        /// Сохраняет данные из полей формы в объект NewClient.
+        /// Выполняет форматирование (заглавные буквы, приведение email к нижнему регистру).
+        /// </summary>
         private void SaveClientData()
         {
             NewClient.first_name = CapitalizeName(FirstNameTextBox.Text.Trim());
@@ -671,6 +805,17 @@ namespace ynivermag_bad
             NewClient.address = AddressTextBox.Text.Trim();
         }
 
+        /// <summary>
+        /// Приводит имя/фамилию к формату с заглавной первой буквой.
+        /// Обрабатывает составные имена с дефисом и пробелами.
+        /// </summary>
+        /// <param name="name">Исходное имя</param>
+        /// <returns>Отформатированное имя</returns>
+        /// <example>
+        /// "иван" -> "Иван"
+        /// "иван петров" -> "Иван Петров"
+        /// "анна-мария" -> "Анна-Мария"
+        /// </example>
         private string CapitalizeName(string name)
         {
             if (string.IsNullOrWhiteSpace(name)) return name;
@@ -693,6 +838,10 @@ namespace ynivermag_bad
             return result;
         }
 
+        /// <summary>
+        /// Добавляет нового клиента в базу данных.
+        /// </summary>
+        /// <returns>true, если добавление прошло успешно</returns>
         private bool AddClientToDatabase()
         {
             try
@@ -731,7 +880,8 @@ namespace ynivermag_bad
             }
             catch (MySqlException sqlEx)
             {
-                if (sqlEx.Number == 1062)
+                // Обработка специфических ошибок MySQL
+                if (sqlEx.Number == 1062) // Ошибка дубликата (unique constraint)
                 {
                     MessageBox.Show("Клиент с таким email уже существует", "Ошибка",
                                   MessageBoxButtons.OK, MessageBoxIcon.Error);
@@ -752,5 +902,35 @@ namespace ynivermag_bad
         }
 
         #endregion
+
+        private void FirstNameTextBox_Validating(object sender, CancelEventArgs e)
+        {
+            if (!string.IsNullOrWhiteSpace(FirstNameTextBox.Text))
+            {
+                // Делаем первую букву заглавной
+                string name = FirstNameTextBox.Text.Trim();
+                if (name.Length > 0)
+                {
+                    name = char.ToUpper(name[0]) + name.Substring(1);
+                    FirstNameTextBox.Text = name;
+                }
+            
+
+        }
+    }
+
+        private void LastNameTextBox_Validating(object sender, CancelEventArgs e)
+        {
+            if (!string.IsNullOrWhiteSpace(LastNameTextBox.Text))
+            {
+                // Делаем первую букву заглавной
+                string name = LastNameTextBox.Text.Trim();
+                if (name.Length > 0)
+                {
+                    name = char.ToUpper(name[0]) + name.Substring(1);
+                    LastNameTextBox.Text = name;
+                }
+            }
+        }
     }
 }

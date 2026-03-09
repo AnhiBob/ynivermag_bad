@@ -5,30 +5,86 @@ using System.Data;
 using System.Drawing;
 using System.Linq;
 using System.Windows.Forms;
-using static System.Windows.Forms.VisualStyles.VisualStyleElement;
 
 namespace ynivermag_bad
 {
+    /// <summary>
+    /// Форма для управления инвентаризацией товаров.
+    /// Предоставляет функционал для:
+    /// - Приёмки товаров на склад
+    /// - Списания товаров со склада
+    /// - Просмотра истории операций
+    /// - Автоматического обновления остатков
+    /// - Валидации вводимых данных
+    /// </summary>
     public partial class InventoryForm : Form
     {
+        // ============ КОНСТАНТЫ ============
 
-        private const int MAX_RECEIVE_QUANTITY = 100; // Максимум для приёмки
-        private const int MAX_WRITEOFF_QUANTITY = 50; // Максимум для списания
-        private const int MAX_CART_ITEMS = 20; // Максимум позиций в корзине
+        /// <summary>
+        /// Максимальное количество товара для одной операции приёмки
+        /// </summary>
+        private const int MAX_RECEIVE_QUANTITY = 100;
 
+        /// <summary>
+        /// Максимальное количество товара для одной операции списания
+        /// </summary>
+        private const int MAX_WRITEOFF_QUANTITY = 50;
+
+        /// <summary>
+        /// Максимальное количество позиций в корзине
+        /// </summary>
+        private const int MAX_CART_ITEMS = 20;
+
+        // ============ ПОЛЯ КЛАССА ============
+
+        /// <summary>
+        /// Строка подключения к базе данных
+        /// </summary>
         private string _connection;
+
+        /// <summary>
+        /// ФИО текущего пользователя
+        /// </summary>
         private string _currentUser;
+
+        /// <summary>
+        /// Логин текущего пользователя
+        /// </summary>
         private string _currentLogin;
+
+        /// <summary>
+        /// ID текущего пользователя в базе данных
+        /// </summary>
         private int _currentUserId;
+
+        /// <summary>
+        /// Флаг для предотвращения рекурсивного обновления поля поиска приёмки
+        /// </summary>
         private bool _isUpdatingSearchReceive = false;
+
+        /// <summary>
+        /// Флаг для предотвращения рекурсивного обновления поля поиска списания
+        /// </summary>
         private bool _isUpdatingSearchWriteOff = false;
 
-        // Для приёмки
+        /// <summary>
+        /// Таблица-корзина для товаров, принимаемых на склад
+        /// </summary>
         private DataTable _receiveCart;
 
-        // Для списания
+        /// <summary>
+        /// Таблица-корзина для товаров, списываемых со склада
+        /// </summary>
         private DataTable _writeOffCart;
 
+        // ============ КОНСТРУКТОР ============
+
+        /// <summary>
+        /// Конструктор формы инвентаризации
+        /// </summary>
+        /// <param name="fio">ФИО текущего пользователя</param>
+        /// <param name="login">Логин текущего пользователя (опционально)</param>
         public InventoryForm(string fio, string login = null)
         {
             InitializeComponent();
@@ -47,43 +103,28 @@ namespace ynivermag_bad
                 "Брак", "Истек срок годности", "Утеря", "Порча", "Инвентаризация", "Другое"
             });
             comboReason.SelectedIndex = -1;
-            // Подписываемся на событие изменения выбора
+
+            // Подписываемся на событие изменения выбора причины
             comboReason.SelectedIndexChanged += ComboReason_SelectedIndexChanged;
 
-            // Изначально кнопка неактивна (так как SelectedIndex = -1)
+            // Изначально кнопка списания неактивна (причина не выбрана)
             button4.Enabled = false;
 
             // Подписываемся на события
             tabControl1.SelectedIndexChanged += TabControl1_SelectedIndexChanged;
 
-            // ДОБАВЛЕНО: фильтрация ввода в полях поиска
+            // Фильтрация ввода в полях поиска
             txtSearchReceive.TextChanged += TxtSearchReceive_TextChanged;
             txtSearchReceive.KeyPress += TxtSearch_KeyPress;
             txtSearchWriteOff.TextChanged += TxtSearchWriteOff_TextChanged;
             txtSearchWriteOff.KeyPress += TxtSearch_KeyPress;
 
-            // ДОБАВЛЕНО: подсказки для полей поиска
+            // Подсказки для полей поиска
             toolTip1.SetToolTip(txtSearchReceive, "Поиск по названию товара (буквы, цифры, пробел, дефис)");
             toolTip1.SetToolTip(txtSearchWriteOff, "Поиск по названию товара (буквы, цифры, пробел, дефис)");
 
             // Инициализируем корзины
-            _receiveCart = new DataTable();
-            _receiveCart.Columns.Add("ID", typeof(int));
-            _receiveCart.Columns.Add("Товар", typeof(string));
-            _receiveCart.Columns.Add("Количество", typeof(int));
-            _receiveCart.Columns.Add("Цена", typeof(decimal));
-            _receiveCart.Columns.Add("Сумма", typeof(decimal));
-            _receiveCart.Columns.Add("Доступно", typeof(int)); // Для списания
-            dataGridViewReceiveCart.DataSource = _receiveCart;
-
-            _writeOffCart = new DataTable();
-            _writeOffCart.Columns.Add("ID", typeof(int));
-            _writeOffCart.Columns.Add("Товар", typeof(string));
-            _writeOffCart.Columns.Add("Количество", typeof(int));
-            _writeOffCart.Columns.Add("Цена", typeof(decimal));
-            _writeOffCart.Columns.Add("Сумма", typeof(decimal));
-            _writeOffCart.Columns.Add("Доступно", typeof(int)); // Для списания
-            dataGridViewWriteOffCart.DataSource = _writeOffCart;
+            InitializeCarts();
 
             // Загружаем товары при запуске
             LoadProducts(dataGridViewReceiveSearch);
@@ -92,8 +133,18 @@ namespace ynivermag_bad
             UpdateWriteOffTotal();
         }
 
+        // ============ ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ ============
+
+        /// <summary>
+        /// Создает новое подключение к базе данных
+        /// </summary>
+        /// <returns>Объект MySqlConnection с настроенной строкой подключения</returns>
         private MySqlConnection GetNewConnection() => new MySqlConnection(_connection);
 
+        /// <summary>
+        /// Загружает ID текущего пользователя из базы данных
+        /// Сначала пытается найти по логину, затем по ФИО
+        /// </summary>
         private void LoadCurrentUserId()
         {
             try
@@ -102,7 +153,7 @@ namespace ynivermag_bad
                 {
                     conn.Open();
 
-                    // Пытаемся найти по логину (приоритет)
+                    // Пытаемся найти по логину (приоритетный способ)
                     if (!string.IsNullOrEmpty(_currentLogin))
                     {
                         string sqlLogin = "SELECT user_id FROM user WHERE username = @login";
@@ -143,24 +194,59 @@ namespace ynivermag_bad
             }
         }
 
+        /// <summary>
+        /// Инициализирует структуру таблиц-корзин для приёмки и списания
+        /// </summary>
+        private void InitializeCarts()
+        {
+            // Корзина для приёмки
+            _receiveCart = new DataTable();
+            _receiveCart.Columns.Add("ID", typeof(int));           // ID товара
+            _receiveCart.Columns.Add("Товар", typeof(string));     // Название товара
+            _receiveCart.Columns.Add("Количество", typeof(int));   // Количество
+            _receiveCart.Columns.Add("Цена", typeof(decimal));     // Цена за единицу
+            _receiveCart.Columns.Add("Сумма", typeof(decimal));    // Общая сумма
+            _receiveCart.Columns.Add("Доступно", typeof(int));     // Доступное количество (для списания)
+            dataGridViewReceiveCart.DataSource = _receiveCart;
+
+            // Корзина для списания
+            _writeOffCart = new DataTable();
+            _writeOffCart.Columns.Add("ID", typeof(int));
+            _writeOffCart.Columns.Add("Товар", typeof(string));
+            _writeOffCart.Columns.Add("Количество", typeof(int));
+            _writeOffCart.Columns.Add("Цена", typeof(decimal));
+            _writeOffCart.Columns.Add("Сумма", typeof(decimal));
+            _writeOffCart.Columns.Add("Доступно", typeof(int));
+            dataGridViewWriteOffCart.DataSource = _writeOffCart;
+        }
+
+        // ============ НАСТРОЙКА ТАБЛИЦ ============
+
+        /// <summary>
+        /// Настраивает все таблицы на форме
+        /// </summary>
         private void ConfigureAllGrids()
         {
-            // ========== ТАБЛИЦА ПОИСКА ДЛЯ ПРИЁМКИ ==========
+            // Таблица поиска для приёмки
             ConfigureSearchGrid(dataGridViewReceiveSearch);
 
-            // ========== КОРЗИНА ПРИЁМКИ ==========
+            // Корзина приёмки
             ConfigureReceiveCartGrid();
 
-            // ========== ТАБЛИЦА ПОИСКА ДЛЯ СПИСАНИЯ ==========
+            // Таблица поиска для списания
             ConfigureSearchGrid(dataGridViewWriteOffSearch);
 
-            // ========== КОРЗИНА СПИСАНИЯ ==========
+            // Корзина списания
             ConfigureWriteOffCartGrid();
 
-            // ========== ТАБЛИЦА ИСТОРИИ ==========
+            // Таблица истории
             ConfigureHistoryGrid();
         }
 
+        /// <summary>
+        /// Настраивает таблицу поиска товаров
+        /// </summary>
+        /// <param name="grid">DataGridView для настройки</param>
         private void ConfigureSearchGrid(DataGridView grid)
         {
             grid.AutoGenerateColumns = false;
@@ -171,14 +257,14 @@ namespace ynivermag_bad
             grid.AllowUserToAddRows = false;
             grid.RowTemplate.Height = 30;
 
-            // ID (скрытый)
+            // ID товара (скрытая колонка)
             DataGridViewTextBoxColumn idCol = new DataGridViewTextBoxColumn();
             idCol.Name = "ID";
             idCol.DataPropertyName = "ID";
             idCol.Visible = false;
             grid.Columns.Add(idCol);
 
-            // Название
+            // Название товара
             DataGridViewTextBoxColumn nameCol = new DataGridViewTextBoxColumn();
             nameCol.Name = "Название";
             nameCol.HeaderText = "Название товара";
@@ -206,7 +292,7 @@ namespace ynivermag_bad
             qtyCol.DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleRight;
             grid.Columns.Add(qtyCol);
 
-            // Кнопка добавления
+            // Кнопка добавления в корзину
             DataGridViewButtonColumn addBtn = new DataGridViewButtonColumn();
             addBtn.Name = "Добавить";
             addBtn.HeaderText = "";
@@ -216,6 +302,9 @@ namespace ynivermag_bad
             grid.Columns.Add(addBtn);
         }
 
+        /// <summary>
+        /// Настраивает таблицу корзины для приёмки
+        /// </summary>
         private void ConfigureReceiveCartGrid()
         {
             dataGridViewReceiveCart.AutoGenerateColumns = false;
@@ -225,18 +314,20 @@ namespace ynivermag_bad
             dataGridViewReceiveCart.AllowUserToAddRows = false;
             dataGridViewReceiveCart.RowTemplate.Height = 30;
             dataGridViewReceiveCart.EditMode = DataGridViewEditMode.EditOnEnter;
+
+            // Подписка на события редактирования
             dataGridViewReceiveCart.CellEndEdit += DataGridViewReceiveCart_CellEndEdit;
             dataGridViewReceiveCart.CellValidating += DataGridViewReceiveCart_CellValidating;
             dataGridViewReceiveCart.EditingControlShowing += DataGridViewReceiveCart_EditingControlShowing;
 
-            // ID (скрытый)
+            // ID товара (скрытая колонка)
             DataGridViewTextBoxColumn idCol = new DataGridViewTextBoxColumn();
             idCol.Name = "ID";
             idCol.DataPropertyName = "ID";
             idCol.Visible = false;
             dataGridViewReceiveCart.Columns.Add(idCol);
 
-            // Товар
+            // Название товара
             DataGridViewTextBoxColumn nameCol = new DataGridViewTextBoxColumn();
             nameCol.Name = "Товар";
             nameCol.HeaderText = "Товар";
@@ -246,7 +337,7 @@ namespace ynivermag_bad
             nameCol.DefaultCellStyle.WrapMode = DataGridViewTriState.True;
             dataGridViewReceiveCart.Columns.Add(nameCol);
 
-            // Количество (редактируемое)
+            // Количество (редактируемое поле)
             DataGridViewTextBoxColumn qtyCol = new DataGridViewTextBoxColumn();
             qtyCol.Name = "Количество";
             qtyCol.HeaderText = "Кол-во";
@@ -256,7 +347,7 @@ namespace ynivermag_bad
             qtyCol.DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleRight;
             dataGridViewReceiveCart.Columns.Add(qtyCol);
 
-            // Цена
+            // Цена (только для чтения)
             DataGridViewTextBoxColumn priceCol = new DataGridViewTextBoxColumn();
             priceCol.Name = "Цена";
             priceCol.HeaderText = "Цена";
@@ -267,7 +358,7 @@ namespace ynivermag_bad
             priceCol.DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleRight;
             dataGridViewReceiveCart.Columns.Add(priceCol);
 
-            // Сумма
+            // Сумма (только для чтения, вычисляется автоматически)
             DataGridViewTextBoxColumn sumCol = new DataGridViewTextBoxColumn();
             sumCol.Name = "Сумма";
             sumCol.HeaderText = "Сумма";
@@ -278,7 +369,7 @@ namespace ynivermag_bad
             sumCol.DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleRight;
             dataGridViewReceiveCart.Columns.Add(sumCol);
 
-            // Кнопка удаления
+            // Кнопка удаления из корзины
             DataGridViewButtonColumn removeBtn = new DataGridViewButtonColumn();
             removeBtn.Name = "Удалить";
             removeBtn.HeaderText = "";
@@ -289,6 +380,9 @@ namespace ynivermag_bad
             dataGridViewReceiveCart.Columns.Add(removeBtn);
         }
 
+        /// <summary>
+        /// Настраивает таблицу корзины для списания
+        /// </summary>
         private void ConfigureWriteOffCartGrid()
         {
             dataGridViewWriteOffCart.AutoGenerateColumns = false;
@@ -298,18 +392,20 @@ namespace ynivermag_bad
             dataGridViewWriteOffCart.AllowUserToAddRows = false;
             dataGridViewWriteOffCart.RowTemplate.Height = 30;
             dataGridViewWriteOffCart.EditMode = DataGridViewEditMode.EditOnEnter;
+
+            // Подписка на события редактирования
             dataGridViewWriteOffCart.CellEndEdit += DataGridViewWriteOffCart_CellEndEdit;
             dataGridViewWriteOffCart.CellValidating += DataGridViewWriteOffCart_CellValidating;
             dataGridViewWriteOffCart.EditingControlShowing += DataGridViewWriteOffCart_EditingControlShowing;
 
-            // ID (скрытый)
+            // ID товара (скрытая колонка)
             DataGridViewTextBoxColumn idCol = new DataGridViewTextBoxColumn();
             idCol.Name = "ID";
             idCol.DataPropertyName = "ID";
             idCol.Visible = false;
             dataGridViewWriteOffCart.Columns.Add(idCol);
 
-            // Товар
+            // Название товара
             DataGridViewTextBoxColumn nameCol = new DataGridViewTextBoxColumn();
             nameCol.Name = "Товар";
             nameCol.HeaderText = "Товар";
@@ -319,7 +415,7 @@ namespace ynivermag_bad
             nameCol.DefaultCellStyle.WrapMode = DataGridViewTriState.True;
             dataGridViewWriteOffCart.Columns.Add(nameCol);
 
-            // Количество (редактируемое)
+            // Количество (редактируемое поле)
             DataGridViewTextBoxColumn qtyCol = new DataGridViewTextBoxColumn();
             qtyCol.Name = "Количество";
             qtyCol.HeaderText = "Кол-во";
@@ -329,7 +425,7 @@ namespace ynivermag_bad
             qtyCol.DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleRight;
             dataGridViewWriteOffCart.Columns.Add(qtyCol);
 
-            // Цена
+            // Цена (только для чтения)
             DataGridViewTextBoxColumn priceCol = new DataGridViewTextBoxColumn();
             priceCol.Name = "Цена";
             priceCol.HeaderText = "Цена";
@@ -340,7 +436,7 @@ namespace ynivermag_bad
             priceCol.DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleRight;
             dataGridViewWriteOffCart.Columns.Add(priceCol);
 
-            // Сумма
+            // Сумма (только для чтения)
             DataGridViewTextBoxColumn sumCol = new DataGridViewTextBoxColumn();
             sumCol.Name = "Сумма";
             sumCol.HeaderText = "Сумма";
@@ -351,14 +447,14 @@ namespace ynivermag_bad
             sumCol.DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleRight;
             dataGridViewWriteOffCart.Columns.Add(sumCol);
 
-            // Доступно (скрытое поле для проверки)
+            // Доступное количество (скрытое поле для проверки)
             DataGridViewTextBoxColumn availCol = new DataGridViewTextBoxColumn();
             availCol.Name = "Доступно";
             availCol.DataPropertyName = "Доступно";
             availCol.Visible = false;
             dataGridViewWriteOffCart.Columns.Add(availCol);
 
-            // Кнопка удаления
+            // Кнопка удаления из корзины
             DataGridViewButtonColumn removeBtn = new DataGridViewButtonColumn();
             removeBtn.Name = "Удалить";
             removeBtn.HeaderText = "";
@@ -369,6 +465,9 @@ namespace ynivermag_bad
             dataGridViewWriteOffCart.Columns.Add(removeBtn);
         }
 
+        /// <summary>
+        /// Настраивает таблицу истории операций
+        /// </summary>
         private void ConfigureHistoryGrid()
         {
             dataGridViewHistory.AutoGenerateColumns = false;
@@ -378,7 +477,7 @@ namespace ynivermag_bad
             dataGridViewHistory.AllowUserToAddRows = false;
             dataGridViewHistory.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
 
-            // Дата
+            // Дата операции
             DataGridViewTextBoxColumn dateCol = new DataGridViewTextBoxColumn();
             dateCol.Name = "Дата";
             dateCol.HeaderText = "Дата";
@@ -394,7 +493,7 @@ namespace ynivermag_bad
             productCol.Width = 250;
             dataGridViewHistory.Columns.Add(productCol);
 
-            // Тип операции
+            // Тип операции (приёмка/списание)
             DataGridViewTextBoxColumn typeCol = new DataGridViewTextBoxColumn();
             typeCol.Name = "Тип";
             typeCol.HeaderText = "Тип";
@@ -411,7 +510,7 @@ namespace ynivermag_bad
             qtyCol.DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleRight;
             dataGridViewHistory.Columns.Add(qtyCol);
 
-            // Было
+            // Количество до операции
             DataGridViewTextBoxColumn oldCol = new DataGridViewTextBoxColumn();
             oldCol.Name = "Было";
             oldCol.HeaderText = "Было";
@@ -420,7 +519,7 @@ namespace ynivermag_bad
             oldCol.DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleRight;
             dataGridViewHistory.Columns.Add(oldCol);
 
-            // Стало
+            // Количество после операции
             DataGridViewTextBoxColumn newCol = new DataGridViewTextBoxColumn();
             newCol.Name = "Стало";
             newCol.HeaderText = "Стало";
@@ -429,7 +528,7 @@ namespace ynivermag_bad
             newCol.DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleRight;
             dataGridViewHistory.Columns.Add(newCol);
 
-            // Пользователь
+            // Пользователь, выполнивший операцию
             DataGridViewTextBoxColumn userCol = new DataGridViewTextBoxColumn();
             userCol.Name = "Пользователь";
             userCol.HeaderText = "Пользователь";
@@ -437,7 +536,7 @@ namespace ynivermag_bad
             userCol.Width = 180;
             dataGridViewHistory.Columns.Add(userCol);
 
-            // Комментарий
+            // Комментарий к операции
             DataGridViewTextBoxColumn commentCol = new DataGridViewTextBoxColumn();
             commentCol.Name = "Комментарий";
             commentCol.HeaderText = "Комментарий";
@@ -446,24 +545,40 @@ namespace ynivermag_bad
             dataGridViewHistory.Columns.Add(commentCol);
         }
 
+        // ============ ОБРАБОТЧИКИ ПЕРЕКЛЮЧЕНИЯ ВКЛАДОК ============
+
+        /// <summary>
+        /// Обработчик смены активной вкладки
+        /// Загружает соответствующие данные
+        /// </summary>
         private void TabControl1_SelectedIndexChanged(object sender, EventArgs e)
         {
             if (tabControl1.SelectedTab == tabPageReceive)
             {
+                // Вкладка приёмки
                 LoadProducts(dataGridViewReceiveSearch);
                 UpdateReceiveTotal();
             }
             else if (tabControl1.SelectedTab == tabPageWriteOff)
             {
+                // Вкладка списания
                 LoadProducts(dataGridViewWriteOffSearch);
                 UpdateWriteOffTotal();
             }
             else if (tabControl1.SelectedTab == tabPageHistory)
             {
+                // Вкладка истории
                 LoadHistory();
             }
         }
 
+        // ============ ЗАГРУЗКА ДАННЫХ ============
+
+        /// <summary>
+        /// Загружает список товаров из базы данных в указанную таблицу
+        /// </summary>
+        /// <param name="grid">Таблица для загрузки</param>
+        /// <param name="searchText">Текст для поиска (фильтрации)</param>
         private void LoadProducts(DataGridView grid, string searchText = "")
         {
             try
@@ -471,6 +586,8 @@ namespace ynivermag_bad
                 using (var conn = GetNewConnection())
                 {
                     conn.Open();
+
+                    // SQL-запрос для получения активных товаров
                     string sql = @"SELECT 
                         product_id as ID,
                         name as Название,
@@ -479,10 +596,11 @@ namespace ynivermag_bad
                     FROM product 
                     WHERE isActive = TRUE";
 
+                    // Добавляем условие поиска, если указан текст
                     if (!string.IsNullOrWhiteSpace(searchText))
                         sql += " AND name LIKE @search";
 
-                    sql += " ORDER BY name LIMIT 100";
+                    sql += " ORDER BY name LIMIT 100"; // Ограничиваем до 100 записей
 
                     MySqlCommand cmd = new MySqlCommand(sql, conn);
                     if (!string.IsNullOrWhiteSpace(searchText))
@@ -509,7 +627,7 @@ namespace ynivermag_bad
             }
         }
 
-        #region Фильтрация ввода в полях поиска
+        // ============ ФИЛЬТРАЦИЯ ВВОДА В ПОЛЯХ ПОИСКА ============
 
         /// <summary>
         /// Фильтрация ввода в поле поиска - разрешаем только буквы, цифры, пробел и дефис
@@ -605,6 +723,8 @@ namespace ynivermag_bad
         /// <summary>
         /// Фильтр для текста поиска - оставляем только буквы, цифры, пробел и дефис
         /// </summary>
+        /// <param name="input">Входная строка</param>
+        /// <returns>Отфильтрованная строка</returns>
         private string FilterSearchText(string input)
         {
             if (string.IsNullOrEmpty(input)) return input;
@@ -615,12 +735,15 @@ namespace ynivermag_bad
                 c == '-').ToArray());        // Дефис
         }
 
-        #endregion
+        // ============ ПРИЁМКА ТОВАРОВ ============
 
-        // ========== ПРИЁМКА ==========
-
+        /// <summary>
+        /// Обработчик клика по ячейке таблицы поиска приёмки
+        /// Добавляет выбранный товар в корзину приёмки
+        /// </summary>
         private void dataGridViewReceiveSearch_CellClick(object sender, DataGridViewCellEventArgs e)
         {
+            // Проверяем, что клик был по кнопке "Добавить" и не по заголовку
             if (e.RowIndex < 0 || e.ColumnIndex != dataGridViewReceiveSearch.Columns["Добавить"].Index)
                 return;
 
@@ -630,13 +753,14 @@ namespace ynivermag_bad
             decimal price = Convert.ToDecimal(row.Cells["Цена"].Value);
             int quantity = (int)numericReceive.Value;
 
-            // Проверка на максимальное количество
+            // Проверка на положительное количество
             if (quantity <= 0)
             {
                 MessageBox.Show("Количество должно быть больше 0!");
                 return;
             }
 
+            // Проверка на максимальное количество для одной операции
             if (quantity > MAX_RECEIVE_QUANTITY)
             {
                 MessageBox.Show($"Максимальное количество для приёмки: {MAX_RECEIVE_QUANTITY} шт.");
@@ -665,6 +789,7 @@ namespace ynivermag_bad
                         return;
                     }
 
+                    // Обновляем существующую запись
                     r["Количество"] = newTotal;
                     r["Сумма"] = Convert.ToDecimal(r["Цена"]) * newTotal;
                     found = true;
@@ -672,6 +797,7 @@ namespace ynivermag_bad
                 }
             }
 
+            // Если товара нет в корзине, добавляем новую запись
             if (!found)
             {
                 DataRow newRow = _receiveCart.NewRow();
@@ -686,6 +812,10 @@ namespace ynivermag_bad
             UpdateReceiveTotal();
         }
 
+        /// <summary>
+        /// Обработчик клика по ячейке корзины приёмки
+        /// Удаляет товар из корзины при клике на кнопку удаления
+        /// </summary>
         private void dataGridViewReceiveCart_CellClick(object sender, DataGridViewCellEventArgs e)
         {
             if (e.RowIndex < 0) return;
@@ -698,7 +828,9 @@ namespace ynivermag_bad
             }
         }
 
-        // Валидация количества в корзине приёмки
+        /// <summary>
+        /// Валидация количества в корзине приёмки
+        /// </summary>
         private void DataGridViewReceiveCart_CellValidating(object sender, DataGridViewCellValidatingEventArgs e)
         {
             if (dataGridViewReceiveCart.Columns[e.ColumnIndex].Name == "Количество")
@@ -716,7 +848,9 @@ namespace ynivermag_bad
             }
         }
 
-        // После редактирования количества в приёмке
+        /// <summary>
+        /// После редактирования количества в приёмке пересчитывает сумму
+        /// </summary>
         private void DataGridViewReceiveCart_CellEndEdit(object sender, DataGridViewCellEventArgs e)
         {
             if (dataGridViewReceiveCart.Columns[e.ColumnIndex].Name == "Количество")
@@ -729,7 +863,9 @@ namespace ynivermag_bad
             }
         }
 
-        // Ограничение ввода только цифр для количества в корзине приёмки
+        /// <summary>
+        /// Ограничение ввода только цифр для количества в корзине приёмки
+        /// </summary>
         private void DataGridViewReceiveCart_EditingControlShowing(object sender, DataGridViewEditingControlShowingEventArgs e)
         {
             if (dataGridViewReceiveCart.CurrentCell.ColumnIndex == dataGridViewReceiveCart.Columns["Количество"].Index)
@@ -747,9 +883,12 @@ namespace ynivermag_bad
             }
         }
 
+        /// <summary>
+        /// Обновляет итоговую информацию по корзине приёмки
+        /// </summary>
         private void UpdateReceiveTotal()
         {
-            int totalItems = 0; // Общее количество единиц товара
+            int totalItems = 0;      // Общее количество единиц товара
             int totalPositions = _receiveCart.Rows.Count; // Количество позиций
 
             foreach (DataRow row in _receiveCart.Rows)
@@ -764,12 +903,19 @@ namespace ynivermag_bad
             lblReceiveTotal.Text = $"Позиций: {totalPositions}, Всего единиц: {totalItems}, Сумма: {totalSum:C2}";
         }
 
+        /// <summary>
+        /// Очистка корзины приёмки
+        /// </summary>
         private void btnReceiveClear_Click(object sender, EventArgs e)
         {
             _receiveCart.Clear();
             UpdateReceiveTotal();
         }
 
+        /// <summary>
+        /// Обработка операции приёмки товаров
+        /// Обновляет остатки в базе данных и записывает историю
+        /// </summary>
         private void btnReceiveProcess_Click(object sender, EventArgs e)
         {
             if (_receiveCart.Rows.Count == 0)
@@ -789,21 +935,21 @@ namespace ynivermag_bad
                         int productId = Convert.ToInt32(row["ID"]);
                         int quantity = Convert.ToInt32(row["Количество"]);
 
-                        // Получаем текущее количество
+                        // Получаем текущее количество на складе
                         string sql1 = "SELECT stock_quantity FROM product WHERE product_id = @id";
                         MySqlCommand cmd1 = new MySqlCommand(sql1, conn);
                         cmd1.Parameters.AddWithValue("@id", productId);
                         int oldQty = Convert.ToInt32(cmd1.ExecuteScalar());
                         int newQty = oldQty + quantity;
 
-                        // Обновляем количество
+                        // Обновляем количество в таблице product
                         string sql2 = "UPDATE product SET stock_quantity = @newQty WHERE product_id = @id";
                         MySqlCommand cmd2 = new MySqlCommand(sql2, conn);
                         cmd2.Parameters.AddWithValue("@newQty", newQty);
                         cmd2.Parameters.AddWithValue("@id", productId);
                         cmd2.ExecuteNonQuery();
 
-                        // Записываем в историю
+                        // Записываем операцию в историю
                         string sql3 = @"INSERT INTO inventory_history 
                             (product_id, user_id, operation_type, quantity, old_quantity, new_quantity, comment)
                             VALUES (@pid, @uid, 'приёмка', @qty, @old, @new, 'Приёмка товара')";
@@ -836,8 +982,12 @@ namespace ynivermag_bad
             }
         }
 
-        // ========== СПИСАНИЕ ==========
+        // ============ СПИСАНИЕ ТОВАРОВ ============
 
+        /// <summary>
+        /// Обработчик клика по ячейке таблицы поиска списания
+        /// Добавляет выбранный товар в корзину списания
+        /// </summary>
         private void dataGridViewWriteOffSearch_CellClick(object sender, DataGridViewCellEventArgs e)
         {
             if (e.RowIndex < 0 || e.ColumnIndex != dataGridViewWriteOffSearch.Columns["Добавить"].Index)
@@ -850,12 +1000,14 @@ namespace ynivermag_bad
             decimal price = Convert.ToDecimal(row.Cells["Цена"].Value);
             int quantity = (int)numericWriteOff.Value;
 
+            // Проверка на положительное количество
             if (quantity <= 0)
             {
                 MessageBox.Show("Количество должно быть больше 0!");
                 return;
             }
 
+            // Проверка наличия товара на складе
             if (availableQty < quantity)
             {
                 MessageBox.Show($"Недостаточно товара! На складе: {availableQty} шт.");
@@ -881,6 +1033,7 @@ namespace ynivermag_bad
                 }
             }
 
+            // Если товара нет в корзине, добавляем новую запись
             if (!found)
             {
                 DataRow newRow = _writeOffCart.NewRow();
@@ -896,11 +1049,14 @@ namespace ynivermag_bad
             UpdateWriteOffTotal();
         }
 
+        /// <summary>
+        /// Обработчик клика по ячейке корзины списания
+        /// Удаляет товар из корзины при клике на кнопку удаления
+        /// </summary>
         private void dataGridViewWriteOffCart_CellClick(object sender, DataGridViewCellEventArgs e)
         {
             if (e.RowIndex < 0) return;
 
-            // Проверяем, нажата ли кнопка удаления
             if (e.ColumnIndex == dataGridViewWriteOffCart.Columns["Удалить"].Index)
             {
                 _writeOffCart.Rows[e.RowIndex].Delete();
@@ -908,7 +1064,9 @@ namespace ynivermag_bad
             }
         }
 
-        // Валидация количества в корзине списания
+        /// <summary>
+        /// Валидация количества в корзине списания
+        /// </summary>
         private void DataGridViewWriteOffCart_CellValidating(object sender, DataGridViewCellValidatingEventArgs e)
         {
             if (dataGridViewWriteOffCart.Columns[e.ColumnIndex].Name == "Количество")
@@ -934,7 +1092,9 @@ namespace ynivermag_bad
             }
         }
 
-        // После редактирования количества в списании
+        /// <summary>
+        /// После редактирования количества в списании пересчитывает сумму
+        /// </summary>
         private void DataGridViewWriteOffCart_CellEndEdit(object sender, DataGridViewCellEventArgs e)
         {
             if (dataGridViewWriteOffCart.Columns[e.ColumnIndex].Name == "Количество")
@@ -947,7 +1107,9 @@ namespace ynivermag_bad
             }
         }
 
-        // Ограничение ввода только цифр для количества в корзине списания
+        /// <summary>
+        /// Ограничение ввода только цифр для количества в корзине списания
+        /// </summary>
         private void DataGridViewWriteOffCart_EditingControlShowing(object sender, DataGridViewEditingControlShowingEventArgs e)
         {
             if (dataGridViewWriteOffCart.CurrentCell.ColumnIndex == dataGridViewWriteOffCart.Columns["Количество"].Index)
@@ -965,10 +1127,12 @@ namespace ynivermag_bad
             }
         }
 
-
+        /// <summary>
+        /// Обновляет итоговую информацию по корзине списания
+        /// </summary>
         private void UpdateWriteOffTotal()
         {
-            int totalItems = 0; // Общее количество единиц товара
+            int totalItems = 0;      // Общее количество единиц товара
             int totalPositions = _writeOffCart.Rows.Count; // Количество позиций
 
             foreach (DataRow row in _writeOffCart.Rows)
@@ -983,15 +1147,20 @@ namespace ynivermag_bad
             lblWriteOffTotal.Text = $"Позиций: {totalPositions}, Всего единиц: {totalItems}, Сумма: {totalSum:C2}";
         }
 
+        /// <summary>
+        /// Очистка корзины списания
+        /// </summary>
         private void btnWriteOffClear_Click(object sender, EventArgs e)
         {
-
             _writeOffCart.Clear();
             UpdateWriteOffTotal();
             comboReason.SelectedIndex = -1; // Сбрасываем выбор причины
-                                            // Кнопка автоматически станет неактивной через обработчик SelectedIndexChanged
         }
 
+        /// <summary>
+        /// Обработка операции списания товаров
+        /// Проверяет наличие, обновляет остатки и записывает историю
+        /// </summary>
         private void btnWriteOffProcess_Click(object sender, EventArgs e)
         {
             if (_writeOffCart.Rows.Count == 0)
@@ -1029,7 +1198,7 @@ namespace ynivermag_bad
                             int quantity = Convert.ToInt32(row["Количество"]);
                             decimal price = Convert.ToDecimal(row["Цена"]);
 
-                            // Получаем текущее количество
+                            // Получаем текущее количество на складе
                             string sql1 = "SELECT stock_quantity FROM product WHERE product_id = @id";
                             MySqlCommand cmd1 = new MySqlCommand(sql1, conn);
                             cmd1.Parameters.AddWithValue("@id", productId);
@@ -1053,17 +1222,17 @@ namespace ynivermag_bad
 
                             int newQty = oldQty - quantity;
 
-                            // Обновляем количество
+                            // Обновляем количество в таблице product
                             string sql2 = "UPDATE product SET stock_quantity = @newQty WHERE product_id = @id";
                             MySqlCommand cmd2 = new MySqlCommand(sql2, conn);
                             cmd2.Parameters.AddWithValue("@newQty", newQty);
                             cmd2.Parameters.AddWithValue("@id", productId);
                             cmd2.ExecuteNonQuery();
 
-                            // Записываем в историю
+                            // Записываем операцию в историю с указанием причины
                             string sql3 = @"INSERT INTO inventory_history 
-                        (product_id, user_id, operation_type, quantity, old_quantity, new_quantity, comment)
-                        VALUES (@pid, @uid, 'списание', @qty, @old, @new, @comm)";
+                                (product_id, user_id, operation_type, quantity, old_quantity, new_quantity, comment)
+                                VALUES (@pid, @uid, 'списание', @qty, @old, @new, @comm)";
 
                             MySqlCommand cmd3 = new MySqlCommand(sql3, conn);
                             cmd3.Parameters.AddWithValue("@pid", productId);
@@ -1163,14 +1332,21 @@ namespace ynivermag_bad
                     MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
+
+        /// <summary>
+        /// Обработчик изменения выбранной причины списания
+        /// Активирует кнопку списания только при выбранной причине
+        /// </summary>
         private void ComboReason_SelectedIndexChanged(object sender, EventArgs e)
         {
-            // Активируем кнопку только если выбран какой-то элемент
             button4.Enabled = comboReason.SelectedItem != null;
         }
 
-        // ========== ИСТОРИЯ ==========
+        // ============ ИСТОРИЯ ОПЕРАЦИЙ ============
 
+        /// <summary>
+        /// Загружает историю операций из базы данных
+        /// </summary>
         private void LoadHistory()
         {
             try
@@ -1201,13 +1377,14 @@ namespace ynivermag_bad
                     adapter.Fill(dt);
                     dataGridViewHistory.DataSource = dt;
 
+                    // Подсвечиваем строки разными цветами в зависимости от типа операции
                     foreach (DataGridViewRow row in dataGridViewHistory.Rows)
                     {
                         string type = row.Cells["Тип"].Value?.ToString() ?? "";
                         if (type.Contains("ПРИЁМКА"))
-                            row.DefaultCellStyle.BackColor = Color.FromArgb(230, 255, 230);
+                            row.DefaultCellStyle.BackColor = Color.FromArgb(230, 255, 230); // Светло-зеленый
                         else if (type.Contains("СПИСАНИЕ"))
-                            row.DefaultCellStyle.BackColor = Color.FromArgb(255, 230, 230);
+                            row.DefaultCellStyle.BackColor = Color.FromArgb(255, 230, 230); // Светло-розовый
                     }
 
                     lblTotalRecords.Text = $"Всего записей: {dataGridViewHistory.Rows.Count}";
@@ -1219,25 +1396,28 @@ namespace ynivermag_bad
             }
         }
 
+        /// <summary>
+        /// Обновление истории операций
+        /// </summary>
         private void btnRefreshHistory_Click(object sender, EventArgs e)
         {
             LoadHistory();
         }
 
-        // ========== НАВИГАЦИЯ ==========
+        // ============ НАВИГАЦИЯ ============
 
+        /// <summary>
+        /// Открытие формы добавления нового товара
+        /// </summary>
         private void addProduct_Click(object sender, EventArgs e)
         {
-            // Создаем форму добавления товара
             AddProductForm addForm = new AddProductForm();
 
-            // Показываем форму и ждем результат
             DialogResult result = addForm.ShowDialog();
 
-            // Если товар успешно добавлен
             if (result == DialogResult.OK)
             {
-                // Обновляем список товаров в текущей форме
+                // Обновляем список товаров в текущей вкладке
                 if (tabControl1.SelectedTab == tabPageReceive)
                 {
                     LoadProducts(dataGridViewReceiveSearch, txtSearchReceive.Text);
@@ -1247,12 +1427,14 @@ namespace ynivermag_bad
                     LoadProducts(dataGridViewWriteOffSearch, txtSearchWriteOff.Text);
                 }
 
-                // Показываем сообщение об успехе
                 MessageBox.Show("✅ Товар успешно добавлен! Теперь его можно выбрать в списке.",
                     "Успех", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
         }
 
+        /// <summary>
+        /// Возврат в главное меню
+        /// </summary>
         private void InMenu_Click(object sender, EventArgs e)
         {
             MenuTovarovedForm menu = new MenuTovarovedForm(_currentUser);

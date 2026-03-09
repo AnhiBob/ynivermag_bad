@@ -74,6 +74,7 @@
             this.FirstName.Size = new System.Drawing.Size(292, 29);
             this.FirstName.TabIndex = 2;
             this.FirstName.TextChanged += new System.EventHandler(this.FirstName_TextChanged);
+            this.FirstName.Validating += new System.ComponentModel.CancelEventHandler(this.FirstName_Validating);
             // 
             // RoleCb
             // 
@@ -135,6 +136,7 @@
             this.LastName.Size = new System.Drawing.Size(292, 29);
             this.LastName.TabIndex = 9;
             this.LastName.TextChanged += new System.EventHandler(this.LastName_TextChanged);
+            this.LastName.Validating += new System.ComponentModel.CancelEventHandler(this.LastName_Validating);
             // 
             // Login
             // 

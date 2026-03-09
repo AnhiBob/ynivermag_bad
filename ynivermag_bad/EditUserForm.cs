@@ -10,14 +10,46 @@ using System.Windows.Forms;
 
 namespace ynivermag_bad
 {
+    /// <summary>
+    /// Форма для редактирования существующего пользователя.
+    /// Позволяет изменять все данные пользователя:
+    /// - ФИО (только русские буквы, авто-капитализация)
+    /// - Логин (только латиница, цифры, подчеркивание, точка, проверка уникальности)
+    /// - Пароль (опционально, если нужно сменить)
+    /// - Email (обязательное поле, проверка формата и уникальности)
+    /// - Роль (выбор из списка, с защитой от изменения роли администратора)
+    /// </summary>
     public partial class EditUserForm : Form
     {
+        /// <summary>
+        /// Строка подключения к базе данных
+        /// </summary>
         private string _connection;
+
+        /// <summary>
+        /// Модель данных редактируемого пользователя
+        /// </summary>
         public UserModel User { get; private set; }
+
+        /// <summary>
+        /// Флаг, указывающий, что форма находится в режиме редактирования
+        /// </summary>
         public bool IsEditMode { get; private set; }
+
+        /// <summary>
+        /// Флаг, указывающий, был ли изменен пароль
+        /// </summary>
         private bool _isPasswordChanged = false;
+
+        /// <summary>
+        /// Флаг для предотвращения рекурсивного обновления полей
+        /// </summary>
         private bool _isUpdatingFields = false;
 
+        /// <summary>
+        /// Конструктор формы редактирования пользователя
+        /// </summary>
+        /// <param name="user">Модель пользователя с данными для редактирования</param>
         public EditUserForm(UserModel user)
         {
             InitializeComponent();
@@ -25,11 +57,13 @@ namespace ynivermag_bad
             User = user;
             IsEditMode = true;
 
-            // Настройка полей
+            // Настройка поля пароля (скрытие символов)
             ConfigurePasswordField();
 
-            // Загрузка данных
+            // Загрузка списка ролей из базы данных
             LoadRoles();
+
+            // Загрузка данных пользователя в поля формы
             LoadTextBoxs();
 
             // Подписываемся на события для фильтрации ввода
@@ -38,12 +72,19 @@ namespace ynivermag_bad
 
         #region Инициализация
 
+        /// <summary>
+        /// Настраивает поле пароля - включает скрытие символов
+        /// </summary>
         private void ConfigurePasswordField()
         {
-            Password.PasswordChar = '*';
+            Password.PasswordChar = '*'; // Скрываем вводимые символы
             // Можно добавить кнопку для показа/скрытия пароля
         }
 
+        /// <summary>
+        /// Подписывается на события изменения текста для всех полей ввода
+        /// и события потери фокуса для форматирования
+        /// </summary>
         private void SubscribeToEvents()
         {
             LastName.TextChanged += LastName_TextChanged;
@@ -58,27 +99,31 @@ namespace ynivermag_bad
             Email.Leave += Email_Leave;
         }
 
+        /// <summary>
+        /// Загружает данные пользователя в поля формы
+        /// </summary>
         private void LoadTextBoxs()
         {
-            _isUpdatingFields = true;
+            _isUpdatingFields = true; // Блокируем обработку событий TextChanged
 
             LastName.Text = User.last_name;
             FirstName.Text = User.first_name;
             Login.Text = User.username;
             Email.Text = User.email;
-            Password.Text = "";
+            Password.Text = ""; // Поле пароля оставляем пустым (не показываем существующий пароль)
 
             if (RoleCb.DataSource != null)
             {
                 RoleCb.SelectedValue = User.role_id;
             }
 
-            _isUpdatingFields = false;
+            _isUpdatingFields = false; // Разблокируем обработку событий
 
-            // Блокировка роли для администраторов
+            // Блокировка изменения роли для администраторов
+            // Администратор не может понизить сам себя
             if (IsAdminUser())
             {
-                RoleCb.Enabled = false;
+                RoleCb.Enabled = false; // Запрещаем изменение роли
             }
             else
             {
@@ -86,6 +131,9 @@ namespace ynivermag_bad
             }
         }
 
+        /// <summary>
+        /// Загружает список ролей из базы данных в комбобокс
+        /// </summary>
         private void LoadRoles()
         {
             try
@@ -115,6 +163,10 @@ namespace ynivermag_bad
             }
         }
 
+        /// <summary>
+        /// Проверяет, является ли текущий пользователь администратором
+        /// </summary>
+        /// <returns>true, если пользователь имеет роль администратора</returns>
         private bool IsAdminUser()
         {
             return User.role_id == 1 ||
@@ -125,14 +177,15 @@ namespace ynivermag_bad
 
         #endregion
 
-        #region Фильтрация ввода (как в примере)
+        #region Фильтрация ввода
 
         /// <summary>
-        /// Фильтрация ввода в поле фамилии (только русские буквы, дефис, пробел)
+        /// Фильтрация ввода в поле фамилии
+        /// Разрешены только русские буквы, дефис и пробел
         /// </summary>
         private void LastName_TextChanged(object sender, EventArgs e)
         {
-            if (_isUpdatingFields) return;
+            if (_isUpdatingFields) return; // Игнорируем при программном обновлении
 
             int selectionStart = LastName.SelectionStart;
             string filteredText = FilterToRussianLetters(LastName.Text);
@@ -140,12 +193,14 @@ namespace ynivermag_bad
             if (filteredText != LastName.Text)
             {
                 LastName.Text = filteredText;
+                // Корректируем позицию курсора после фильтрации
                 LastName.SelectionStart = Math.Min(selectionStart, LastName.Text.Length);
             }
         }
 
         /// <summary>
-        /// Фильтрация ввода в поле имени (только русские буквы, дефис, пробел)
+        /// Фильтрация ввода в поле имени
+        /// Разрешены только русские буквы, дефис и пробел
         /// </summary>
         private void FirstName_TextChanged(object sender, EventArgs e)
         {
@@ -162,8 +217,10 @@ namespace ynivermag_bad
         }
 
         /// <summary>
-        /// Фильтр только для русских букв, дефиса и пробела
+        /// Фильтрует строку, оставляя только русские буквы, дефис и пробел
         /// </summary>
+        /// <param name="input">Входная строка</param>
+        /// <returns>Отфильтрованная строка</returns>
         private string FilterToRussianLetters(string input)
         {
             if (string.IsNullOrEmpty(input)) return input;
@@ -172,12 +229,13 @@ namespace ynivermag_bad
                 (c >= 'А' && c <= 'Я') ||   // Заглавные русские
                 (c >= 'а' && c <= 'я') ||   // Строчные русские
                 c == 'Ё' || c == 'ё' ||     // Буква Ё
-                c == '-' ||                  // Дефис
-                c == ' ').ToArray());        // Пробел
+                c == '-' ||                  // Дефис для двойных фамилий
+                c == ' ').ToArray());        // Пробел для составных имен
         }
 
         /// <summary>
-        /// Фильтрация ввода в поле логина (только латиница, цифры, подчеркивание, точка)
+        /// Фильтрация ввода в поле логина
+        /// Разрешены только латинские буквы, цифры, подчеркивание и точка
         /// </summary>
         private void Login_TextChanged(object sender, EventArgs e)
         {
@@ -196,6 +254,8 @@ namespace ynivermag_bad
         /// <summary>
         /// Фильтр для логина: только латиница, цифры, подчеркивание, точка
         /// </summary>
+        /// <param name="input">Входная строка</param>
+        /// <returns>Отфильтрованная строка</returns>
         private string FilterToLoginChars(string input)
         {
             if (string.IsNullOrEmpty(input)) return input;
@@ -205,11 +265,12 @@ namespace ynivermag_bad
                 (c >= 'A' && c <= 'Z') ||   // заглавные латинские
                 (c >= '0' && c <= '9') ||   // цифры
                 c == '_' ||                  // подчеркивание
-                c == '.').ToArray());        // точка
+                c == '.').ToArray());        // точка (для email-подобных логинов)
         }
 
         /// <summary>
-        /// Фильтрация email (только допустимые символы и автоматический lower case)
+        /// Фильтрация email
+        /// Удаляет пробелы и приводит к нижнему регистру
         /// </summary>
         private void Email_TextChanged(object sender, EventArgs e)
         {
@@ -218,32 +279,35 @@ namespace ynivermag_bad
             int cursorPosition = Email.SelectionStart;
             string text = Email.Text;
 
-            // Убираем пробелы
+            // Убираем пробелы (email не может содержать пробелы)
             string filteredText = text.Replace(" ", "");
 
-            // Приводим к нижнему регистру
+            // Приводим к нижнему регистру (email регистронезависим)
             filteredText = filteredText.ToLower();
 
             if (filteredText != text)
             {
                 Email.Text = filteredText;
+                // Корректируем позицию курсора после изменения текста
                 Email.SelectionStart = Math.Max(0, cursorPosition - (text.Length - filteredText.Length));
             }
         }
 
         /// <summary>
-        /// Фильтрация ввода в поле пароля (никаких ограничений, кроме длины)
+        /// Фильтрация ввода в поле пароля
+        /// Пароль может содержать любые символы, ограничена только длина
         /// </summary>
         private void Password_TextChanged(object sender, EventArgs e)
         {
             if (_isUpdatingFields) return;
 
+            // Если в поле пароля появился текст, отмечаем, что пароль изменен
             if (!string.IsNullOrWhiteSpace(Password.Text))
             {
                 _isPasswordChanged = true;
             }
 
-            // Ограничиваем длину пароля
+            // Ограничиваем длину пароля для безопасности
             if (Password.Text.Length > 50)
             {
                 int selectionStart = Password.SelectionStart;
@@ -256,11 +320,16 @@ namespace ynivermag_bad
 
         #region Валидация перед сохранением
 
+        /// <summary>
+        /// Комплексная проверка всех полей перед сохранением
+        /// Собирает все ошибки в список и показывает их одной группой
+        /// </summary>
+        /// <returns>true, если все поля заполнены корректно</returns>
         private bool ValidateData()
         {
             List<string> errors = new List<string>();
 
-            // Проверка фамилии
+            // ===== ПРОВЕРКА ФАМИЛИИ =====
             if (string.IsNullOrWhiteSpace(LastName.Text))
             {
                 errors.Add("Введите фамилию пользователя");
@@ -277,7 +346,7 @@ namespace ynivermag_bad
                 LastName.BackColor = Color.LightPink;
             }
 
-            // Проверка имени
+            // ===== ПРОВЕРКА ИМЕНИ =====
             if (string.IsNullOrWhiteSpace(FirstName.Text))
             {
                 errors.Add("Введите имя пользователя");
@@ -294,7 +363,7 @@ namespace ynivermag_bad
                 FirstName.BackColor = Color.LightPink;
             }
 
-            // Проверка логина
+            // ===== ПРОВЕРКА ЛОГИНА =====
             if (string.IsNullOrWhiteSpace(Login.Text))
             {
                 errors.Add("Введите логин пользователя");
@@ -316,7 +385,7 @@ namespace ynivermag_bad
                 Login.BackColor = Color.LightPink;
             }
 
-            // Проверка email
+            // ===== ПРОВЕРКА EMAIL =====
             if (string.IsNullOrWhiteSpace(Email.Text))
             {
                 errors.Add("Введите email пользователя");
@@ -333,7 +402,7 @@ namespace ynivermag_bad
                 Email.BackColor = Color.LightPink;
             }
 
-            // Проверка пароля (если изменен)
+            // ===== ПРОВЕРКА ПАРОЛЯ (если изменен) =====
             if (_isPasswordChanged)
             {
                 if (string.IsNullOrWhiteSpace(Password.Text))
@@ -353,13 +422,14 @@ namespace ynivermag_bad
                 }
             }
 
-            // Проверка роли
+            // ===== ПРОВЕРКА РОЛИ =====
             if (RoleCb.SelectedValue == null || RoleCb.SelectedValue == DBNull.Value)
             {
                 errors.Add("Выберите роль");
                 RoleCb.BackColor = Color.LightPink;
             }
 
+            // Если есть ошибки, показываем их все
             if (errors.Count > 0)
             {
                 string errorMessage = "Пожалуйста, исправьте следующие ошибки:\n\n• " +
@@ -372,6 +442,11 @@ namespace ynivermag_bad
             return true;
         }
 
+        /// <summary>
+        /// Проверяет корректность email-адреса
+        /// </summary>
+        /// <param name="email">Проверяемый email</param>
+        /// <returns>true, если email корректен</returns>
         private bool IsValidEmail(string email)
         {
             if (string.IsNullOrWhiteSpace(email)) return false;
@@ -382,6 +457,7 @@ namespace ynivermag_bad
                 // Базовая проверка наличия @ и точки
                 if (!email.Contains('@') || !email.Contains('.')) return false;
 
+                // Используем встроенный класс MailAddress для полной проверки
                 var addr = new System.Net.Mail.MailAddress(email);
                 return addr.Address == email;
             }
@@ -391,6 +467,10 @@ namespace ynivermag_bad
             }
         }
 
+        /// <summary>
+        /// Проверяет уникальность логина (исключая текущего пользователя)
+        /// </summary>
+        /// <returns>true, если логин уникален</returns>
         private bool IsLoginUnique()
         {
             using (var connection = new MySqlConnection(_connection))
@@ -416,6 +496,10 @@ namespace ynivermag_bad
             }
         }
 
+        /// <summary>
+        /// Проверяет уникальность email (исключая текущего пользователя)
+        /// </summary>
+        /// <returns>true, если email уникален</returns>
         private bool IsEmailUnique()
         {
             using (var connection = new MySqlConnection(_connection))
@@ -445,6 +529,10 @@ namespace ynivermag_bad
 
         #region Сохранение данных
 
+        /// <summary>
+        /// Сохраняет данные из полей формы в объект User
+        /// Выполняет форматирование и хеширование пароля при необходимости
+        /// </summary>
         private void SaveUserData()
         {
             User.last_name = CapitalizeName(LastName.Text.Trim());
@@ -457,12 +545,19 @@ namespace ynivermag_bad
                 User.role_id = (int)RoleCb.SelectedValue;
             }
 
+            // Если пароль был изменен, хешируем новый пароль
             if (_isPasswordChanged && !string.IsNullOrWhiteSpace(Password.Text))
             {
                 User.password_hash = MySQLHelper.GetHash(Password.Text);
             }
         }
 
+        /// <summary>
+        /// Приводит имя/фамилию к формату с заглавной первой буквой
+        /// Обрабатывает составные имена с дефисом и пробелами
+        /// </summary>
+        /// <param name="name">Исходное имя</param>
+        /// <returns>Отформатированное имя</returns>
         private string CapitalizeName(string name)
         {
             if (string.IsNullOrWhiteSpace(name)) return name;
@@ -489,6 +584,10 @@ namespace ynivermag_bad
 
         #region Обработчики событий
 
+        /// <summary>
+        /// Обработчик нажатия кнопки "Сохранить"
+        /// Выполняет валидацию, сохранение и закрытие формы
+        /// </summary>
         private void EditUser_Click(object sender, EventArgs e)
         {
             if (ValidateData())
@@ -501,6 +600,10 @@ namespace ynivermag_bad
             }
         }
 
+        /// <summary>
+        /// Обработчик кнопки "Назад"/"Отмена"
+        /// Проверяет наличие несохраненных изменений
+        /// </summary>
         private void Back_Click(object sender, EventArgs e)
         {
             if (HasUnsavedChanges())
@@ -517,6 +620,11 @@ namespace ynivermag_bad
             Close();
         }
 
+        /// <summary>
+        /// Проверяет наличие несохраненных изменений в форме
+        /// Сравнивает текущие значения полей с исходными данными пользователя
+        /// </summary>
+        /// <returns>true, если есть изменения</returns>
         private bool HasUnsavedChanges()
         {
             return LastName.Text != User.last_name ||
@@ -528,6 +636,10 @@ namespace ynivermag_bad
                     (int)RoleCb.SelectedValue != User.role_id);
         }
 
+        /// <summary>
+        /// Обработчик потери фокуса полем фамилии
+        /// Применяет форматирование с заглавной буквы
+        /// </summary>
         private void LastName_Leave(object sender, EventArgs e)
         {
             if (!string.IsNullOrWhiteSpace(LastName.Text))
@@ -536,6 +648,10 @@ namespace ynivermag_bad
             }
         }
 
+        /// <summary>
+        /// Обработчик потери фокуса полем имени
+        /// Применяет форматирование с заглавной буквы
+        /// </summary>
         private void FirstName_Leave(object sender, EventArgs e)
         {
             if (!string.IsNullOrWhiteSpace(FirstName.Text))
@@ -544,6 +660,10 @@ namespace ynivermag_bad
             }
         }
 
+        /// <summary>
+        /// Обработчик потери фокуса полем email
+        /// Приводит email к нижнему регистру
+        /// </summary>
         private void Email_Leave(object sender, EventArgs e)
         {
             if (!string.IsNullOrWhiteSpace(Email.Text))
@@ -553,5 +673,31 @@ namespace ynivermag_bad
         }
 
         #endregion
+
+        private void FirstName_Validating(object sender, CancelEventArgs e)
+        {
+            if (!string.IsNullOrWhiteSpace(FirstName.Text))
+            {
+                string name = FirstName.Text.Trim();
+                if (name.Length > 0)
+                {
+                    name = char.ToUpper(name[0]) + name.Substring(1);
+                    FirstName.Text = name;
+                }
+            }
+        }
+
+        private void LastName_Validating(object sender, CancelEventArgs e)
+        {
+            if (!string.IsNullOrWhiteSpace(LastName.Text))
+            {
+                string name = LastName.Text.Trim();
+                if (name.Length > 0)
+                {
+                    name = char.ToUpper(name[0]) + name.Substring(1);
+                    LastName.Text = name;
+                }
+            }
+        }
     }
 }

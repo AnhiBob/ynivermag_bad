@@ -12,24 +12,68 @@ using System.Windows.Forms;
 
 namespace ynivermag_bad
 {
+    /// <summary>
+    /// Форма для редактирования существующего товара.
+    /// Позволяет изменять все характеристики товара:
+    /// - Название (с фильтрацией символов, проверка уникальности)
+    /// - Цена (с автоформатированием, ограничениями)
+    /// - Количество (только цифры)
+    /// - Категория (выбор из списка)
+    /// - Изображение (загрузка, drag-and-drop, оптимизация)
+    /// </summary>
     public partial class EditProductForm : Form
     {
+        /// <summary>
+        /// Строка подключения к базе данных
+        /// </summary>
         private string _connection;
+
+        /// <summary>
+        /// Модель данных редактируемого товара
+        /// </summary>
         public ProductModel Product { get; private set; }
+
+        /// <summary>
+        /// Выбранное изображение товара
+        /// </summary>
         private Image _selectedImage;
+
+        /// <summary>
+        /// Путь к папке с изображениями товаров
+        /// </summary>
         private string _productsImagesPath;
+
+        /// <summary>
+        /// Путь к изображению-заглушке (когда нет фото)
+        /// </summary>
         private string _defaultImagePath;
+
+        /// <summary>
+        /// Флаг, указывающий, было ли изменено изображение
+        /// </summary>
         private bool _imageChanged = false;
+
+        /// <summary>
+        /// Флаг для предотвращения рекурсивного обновления поля цены
+        /// </summary>
         private bool _isUpdatingPrice = false;
+
+        /// <summary>
+        /// Сервис для работы с изображениями товаров
+        /// </summary>
         private ProductImageService _productImageService;
 
-        // Константы
-        private const long MAX_IMAGE_SIZE = 3 * 1024 * 1024; // 3 МБ
-        private const int MAX_NAME_LENGTH = 100;
-        private const int MIN_NAME_LENGTH = 2;
-        private const int MAX_PRICE = 1000000;
-        private const int MAX_QUANTITY = 999999;
+        // Константы для валидации
+        private const long MAX_IMAGE_SIZE = 3 * 1024 * 1024; // 3 МБ - максимальный размер изображения
+        private const int MAX_NAME_LENGTH = 100;             // Максимальная длина названия
+        private const int MIN_NAME_LENGTH = 2;               // Минимальная длина названия
+        private const int MAX_PRICE = 1000000;                // Максимальная цена (1 млн)
+        private const int MAX_QUANTITY = 999999;              // Максимальное количество на складе
 
+        /// <summary>
+        /// Конструктор формы редактирования товара
+        /// </summary>
+        /// <param name="product">Модель товара с данными для редактирования</param>
         public EditProductForm(ProductModel product)
         {
             InitializeComponent();
@@ -50,6 +94,9 @@ namespace ynivermag_bad
 
         #region Инициализация
 
+        /// <summary>
+        /// Подписывается на события для фильтрации ввода и валидации
+        /// </summary>
         private void SubscribeToEvents()
         {
             NameTB.TextChanged += NameTB_TextChanged;
@@ -58,12 +105,17 @@ namespace ynivermag_bad
             NameTB.Validating += NameTB_Validating;
         }
 
+        /// <summary>
+        /// Инициализирует пути к папкам с изображениями
+        /// Создает необходимые директории, если они не существуют
+        /// </summary>
         private void InitializeImagePaths()
         {
             try
             {
                 string startupPath = Application.StartupPath;
 
+                // Корректировка пути для режима отладки (bin/Debug или bin/Release)
                 if (startupPath.Contains(@"\bin\Debug") || startupPath.Contains(@"\bin\Release"))
                 {
                     string projectRoot = Directory.GetParent(Directory.GetParent(startupPath).FullName).FullName;
@@ -92,17 +144,24 @@ namespace ynivermag_bad
 
         #region Загрузка данных
 
+        /// <summary>
+        /// Загружает данные товара в поля формы
+        /// </summary>
         private void LoadProductData()
         {
             _isUpdatingPrice = true;
 
             NameTB.Text = Product.name;
-            Price.Text = Product.price.ToString("F2");
+            Price.Text = Product.price.ToString("F2"); // Формат с двумя знаками после запятой
             Count.Text = Product.stock_quantity.ToString();
 
             _isUpdatingPrice = false;
         }
 
+        /// <summary>
+        /// Загружает список категорий из базы данных в комбобокс
+        /// Добавляет пустую строку для возможности не выбирать категорию
+        /// </summary>
         private void LoadCategories()
         {
             try
@@ -143,12 +202,12 @@ namespace ynivermag_bad
 
                         if (!found)
                         {
-                            CategoryCb.SelectedIndex = 0;
+                            CategoryCb.SelectedIndex = 0; // Выбираем "Без категории"
                         }
                     }
                     else
                     {
-                        CategoryCb.SelectedIndex = 0;
+                        CategoryCb.SelectedIndex = 0; // Выбираем "Без категории"
                     }
                 }
             }
@@ -161,10 +220,11 @@ namespace ynivermag_bad
 
         #endregion
 
-        #region Фильтрация ввода (как в примере)
+        #region Фильтрация ввода
 
         /// <summary>
-        /// Фильтрация ввода в поле названия (только разрешенные символы)
+        /// Фильтрация ввода в поле названия товара
+        /// Разрешены: буквы (любые), цифры, пробел, дефис, скобки
         /// </summary>
         private void NameTB_TextChanged(object sender, EventArgs e)
         {
@@ -174,13 +234,16 @@ namespace ynivermag_bad
             if (filteredText != NameTB.Text)
             {
                 NameTB.Text = filteredText;
+                // Корректируем позицию курсора после фильтрации
                 NameTB.SelectionStart = Math.Min(selectionStart, NameTB.Text.Length);
             }
         }
 
         /// <summary>
-        /// Фильтр для названия товара: буквы (русские/английские), цифры, пробел, дефис, скобки
+        /// Фильтрует строку, оставляя только разрешенные символы для названия товара
         /// </summary>
+        /// <param name="input">Входная строка</param>
+        /// <returns>Отфильтрованная строка</returns>
         private string FilterToProductName(string input)
         {
             if (string.IsNullOrEmpty(input)) return input;
@@ -196,7 +259,8 @@ namespace ynivermag_bad
         }
 
         /// <summary>
-        /// Фильтрация ввода в поле цены (только цифры, точка)
+        /// Фильтрация и форматирование ввода в поле цены
+        /// Оставляет только цифры и одну точку, ограничивает количество знаков
         /// </summary>
         private void Price_TextChanged(object sender, EventArgs e)
         {
@@ -219,7 +283,7 @@ namespace ynivermag_bad
                 // Фильтруем: оставляем только цифры и точку
                 string filteredText = new string(text.Where(c => char.IsDigit(c) || c == '.').ToArray());
 
-                // Заменяем возможные запятые на точку
+                // Заменяем возможные запятые на точку (для единообразия)
                 filteredText = filteredText.Replace(',', '.');
 
                 // Проверяем, что точка только одна
@@ -239,14 +303,14 @@ namespace ynivermag_bad
                     string beforeDot = filteredText.Substring(0, dotIndex);
                     string afterDot = filteredText.Substring(dotIndex + 1);
 
-                    // Ограничиваем количество цифр после точки до 2
+                    // Ограничиваем количество цифр после точки до 2 (копейки)
                     if (afterDot.Length > 2)
                     {
                         afterDot = afterDot.Substring(0, 2);
                         filteredText = beforeDot + "." + afterDot;
                     }
 
-                    // Ограничиваем количество цифр до точки до 6
+                    // Ограничиваем количество цифр до точки до 6 (до миллиона)
                     if (beforeDot.Length > 6)
                     {
                         beforeDot = beforeDot.Substring(0, 6);
@@ -263,6 +327,7 @@ namespace ynivermag_bad
                 }
 
                 // Проверяем, что число не начинается с нуля (если есть другие цифры)
+                // Например, "0123" -> "123"
                 if (filteredText.Length > 1 && filteredText[0] == '0' && filteredText[1] != '.')
                 {
                     filteredText = filteredText.Substring(1);
@@ -279,7 +344,7 @@ namespace ynivermag_bad
                 {
                     Price.Text = filteredText;
 
-                    // Корректируем позицию курсора
+                    // Корректируем позицию курсора после изменения текста
                     int newLength = Price.Text.Length;
                     if (cursorPosition > newLength)
                     {
@@ -307,14 +372,15 @@ namespace ynivermag_bad
         }
 
         /// <summary>
-        /// Фильтрация ввода в поле количества (только цифры)
+        /// Фильтрация ввода в поле количества
+        /// Разрешены только цифры, максимум 6 цифр
         /// </summary>
         private void Count_TextChanged(object sender, EventArgs e)
         {
             int selectionStart = Count.SelectionStart;
             string filteredText = new string(Count.Text.Where(char.IsDigit).ToArray());
 
-            // Ограничиваем до 6 цифр
+            // Ограничиваем до 6 цифр (максимум 999999)
             if (filteredText.Length > 6)
             {
                 filteredText = filteredText.Substring(0, 6);
@@ -331,6 +397,10 @@ namespace ynivermag_bad
 
         #region Работа с изображением
 
+        /// <summary>
+        /// Загружает изображение товара
+        /// Если файл не найден, загружает изображение-заглушку
+        /// </summary>
         private void LoadProductImage()
         {
             try
@@ -359,6 +429,10 @@ namespace ynivermag_bad
             }
         }
 
+        /// <summary>
+        /// Загружает изображение-заглушку
+        /// Если файл заглушки не найден, создает его
+        /// </summary>
         private void LoadDefaultImage()
         {
             try
@@ -393,6 +467,11 @@ namespace ynivermag_bad
             }
         }
 
+        /// <summary>
+        /// Загружает изображение из файла без блокировки файла
+        /// </summary>
+        /// <param name="filePath">Путь к файлу</param>
+        /// <returns>Загруженное изображение или null при ошибке</returns>
         private Image LoadImageWithoutLock(string filePath)
         {
             try
@@ -411,6 +490,12 @@ namespace ynivermag_bad
             }
         }
 
+        /// <summary>
+        /// Создает изображение-заглушку с текстом "Нет фото"
+        /// </summary>
+        /// <param name="width">Ширина изображения</param>
+        /// <param name="height">Высота изображения</param>
+        /// <returns>Созданное изображение</returns>
         private Image CreatePlaceholderImage(int width, int height)
         {
             Bitmap bmp = new Bitmap(width, height);
@@ -434,10 +519,15 @@ namespace ynivermag_bad
             return bmp;
         }
 
+        /// <summary>
+        /// Устанавливает изображение в PictureBox с масштабированием
+        /// </summary>
+        /// <param name="image">Изображение для отображения</param>
         private void SetPictureBoxImage(Image image)
         {
             if (image == null) return;
 
+            // Освобождаем предыдущее изображение, если оно было
             if (pictureBoxProduct.Image != null)
             {
                 Image oldImage = pictureBoxProduct.Image;
@@ -448,6 +538,7 @@ namespace ynivermag_bad
                 }
             }
 
+            // Масштабируем изображение под размер PictureBox
             if (pictureBoxProduct.Width > 0 && pictureBoxProduct.Height > 0)
             {
                 pictureBoxProduct.Image = ScaleImage(image, pictureBoxProduct.Width, pictureBoxProduct.Height);
@@ -458,6 +549,14 @@ namespace ynivermag_bad
             }
         }
 
+        /// <summary>
+        /// Масштабирует изображение до указанных максимальных размеров
+        /// Сохраняет пропорции
+        /// </summary>
+        /// <param name="image">Исходное изображение</param>
+        /// <param name="maxWidth">Максимальная ширина</param>
+        /// <param name="maxHeight">Максимальная высота</param>
+        /// <returns>Масштабированное изображение</returns>
         private Image ScaleImage(Image image, int maxWidth, int maxHeight)
         {
             if (image == null) return null;
@@ -466,6 +565,7 @@ namespace ynivermag_bad
             var ratioY = (double)maxHeight / image.Height;
             var ratio = Math.Min(ratioX, ratioY);
 
+            // Не увеличиваем изображение, если оно меньше указанных размеров
             if (ratio > 1) ratio = 1;
 
             var newWidth = (int)(image.Width * ratio);
@@ -480,6 +580,9 @@ namespace ynivermag_bad
             return newImage;
         }
 
+        /// <summary>
+        /// Освобождает ресурсы изображений для предотвращения утечек памяти
+        /// </summary>
         private void ReleaseImageResources()
         {
             if (pictureBoxProduct.Image != null)
@@ -495,10 +598,15 @@ namespace ynivermag_bad
                 _selectedImage = null;
             }
 
+            // Принудительный сбор мусора для освобождения ресурсов GDI+
             GC.Collect();
             GC.WaitForPendingFinalizers();
         }
 
+        /// <summary>
+        /// Проверяет, используется ли изображение-заглушка
+        /// </summary>
+        /// <returns>true, если используется заглушка</returns>
         private bool IsDefaultImage()
         {
             try
@@ -519,6 +627,10 @@ namespace ynivermag_bad
             }
         }
 
+        /// <summary>
+        /// Сохраняет изображение товара на диск с оптимизацией
+        /// </summary>
+        /// <returns>Имя сохраненного файла или null, если изображение не сохранено</returns>
         private string SaveProductImage()
         {
             try
@@ -546,6 +658,10 @@ namespace ynivermag_bad
             }
         }
 
+        /// <summary>
+        /// Генерирует имя файла для изображения на основе названия товара и времени
+        /// </summary>
+        /// <returns>Сгенерированное имя файла</returns>
         private string GenerateImageFileName()
         {
             string productName = NameTB.Text.Trim().ToLower()
@@ -568,6 +684,9 @@ namespace ynivermag_bad
             return $"product_{productName}_{DateTime.Now:yyyyMMdd_HHmmss}.jpg";
         }
 
+        /// <summary>
+        /// Удаляет старое изображение товара с диска
+        /// </summary>
         private void DeleteOldProductImage()
         {
             try
@@ -598,6 +717,12 @@ namespace ynivermag_bad
             }
         }
 
+        /// <summary>
+        /// Сохраняет изображение с оптимизацией (сжатие JPEG)
+        /// </summary>
+        /// <param name="image">Изображение для сохранения</param>
+        /// <param name="filePath">Путь для сохранения</param>
+        /// <returns>true, если сохранение успешно</returns>
         private bool SaveOptimizedImage(Image image, string filePath)
         {
             try
@@ -605,11 +730,13 @@ namespace ynivermag_bad
                 int maxDimension = 1200;
                 Image imageToSave = image;
 
+                // Масштабируем слишком большие изображения
                 if (image.Width > maxDimension || image.Height > maxDimension)
                 {
                     imageToSave = _productImageService.ScaleImageHighQuality(image, maxDimension, maxDimension);
                 }
 
+                // Используем JPEG кодек с качеством 95% для оптимального соотношения размер/качество
                 var encoder = ImageCodecInfo.GetImageEncoders()
                     .FirstOrDefault(c => c.FormatID == ImageFormat.Jpeg.Guid);
 
@@ -641,6 +768,12 @@ namespace ynivermag_bad
 
         #region Валидация перед сохранением
 
+        /// <summary>
+        /// Проверяет корректность цены
+        /// </summary>
+        /// <param name="priceText">Текст с ценой</param>
+        /// <param name="price">Распарсенная цена (out параметр)</param>
+        /// <returns>true, если цена корректна</returns>
         private bool ValidatePrice(string priceText, out decimal price)
         {
             price = 0;
@@ -655,6 +788,12 @@ namespace ynivermag_bad
             return parsed && price >= 0 && price <= MAX_PRICE;
         }
 
+        /// <summary>
+        /// Проверяет корректность количества
+        /// </summary>
+        /// <param name="quantityText">Текст с количеством</param>
+        /// <param name="quantity">Распарсенное количество (out параметр)</param>
+        /// <returns>true, если количество корректно</returns>
         private bool ValidateQuantity(string quantityText, out int quantity)
         {
             quantity = 0;
@@ -665,6 +804,10 @@ namespace ynivermag_bad
                    quantity >= 0 && quantity <= MAX_QUANTITY;
         }
 
+        /// <summary>
+        /// Проверяет уникальность названия товара (исключая текущий товар)
+        /// </summary>
+        /// <returns>true, если название уникально</returns>
         private bool IsProductNameUnique()
         {
             using (var connection = new MySqlConnection(_connection))
@@ -690,11 +833,16 @@ namespace ynivermag_bad
             }
         }
 
+        /// <summary>
+        /// Комплексная проверка всех полей перед сохранением
+        /// Собирает все ошибки в список и показывает их одной группой
+        /// </summary>
+        /// <returns>true, если все поля заполнены корректно</returns>
         private bool ValidateData()
         {
             List<string> errors = new List<string>();
 
-            // Проверка названия
+            // ===== ПРОВЕРКА НАЗВАНИЯ =====
             if (string.IsNullOrWhiteSpace(NameTB.Text))
             {
                 errors.Add("Введите название продукта");
@@ -711,7 +859,7 @@ namespace ynivermag_bad
                 NameTB.BackColor = Color.LightPink;
             }
 
-            // Проверка цены
+            // ===== ПРОВЕРКА ЦЕНЫ =====
             decimal price;
             if (string.IsNullOrWhiteSpace(Price.Text))
             {
@@ -724,7 +872,7 @@ namespace ynivermag_bad
                 Price.BackColor = Color.LightPink;
             }
 
-            // Проверка количества
+            // ===== ПРОВЕРКА КОЛИЧЕСТВА =====
             int quantity;
             if (string.IsNullOrWhiteSpace(Count.Text))
             {
@@ -737,21 +885,21 @@ namespace ynivermag_bad
                 Count.BackColor = Color.LightPink;
             }
 
-            // Проверка категории
+            // ===== ПРОВЕРКА КАТЕГОРИИ =====
             if (CategoryCb.SelectedValue == null || CategoryCb.SelectedValue == DBNull.Value)
             {
                 errors.Add("Выберите категорию");
                 CategoryCb.BackColor = Color.LightPink;
             }
 
-            // Проверка на уникальность названия
+            // ===== ПРОВЕРКА НА УНИКАЛЬНОСТЬ НАЗВАНИЯ =====
             if (!string.IsNullOrWhiteSpace(NameTB.Text) && !IsProductNameUnique())
             {
                 errors.Add("Продукт с таким названием уже существует");
                 NameTB.BackColor = Color.LightPink;
             }
 
-            // Проверка изображения (предупреждение, не ошибка)
+            // ===== ПРОВЕРКА ИЗОБРАЖЕНИЯ (предупреждение, не ошибка) =====
             if (_selectedImage == null || IsDefaultImage())
             {
                 var result = MessageBox.Show("У товара нет изображения. Продолжить сохранение?",
@@ -762,6 +910,7 @@ namespace ynivermag_bad
                 }
             }
 
+            // Если есть ошибки, показываем их все
             if (errors.Count > 0)
             {
                 string errorMessage = "Пожалуйста, исправьте следующие ошибки:\n\n• " +
@@ -778,6 +927,9 @@ namespace ynivermag_bad
 
         #region Сохранение данных
 
+        /// <summary>
+        /// Сохраняет данные из полей формы в объект Product
+        /// </summary>
         private void SaveProductData()
         {
             ValidatePrice(Price.Text, out decimal price);
@@ -801,12 +953,17 @@ namespace ynivermag_bad
 
         #region Обработчики событий
 
+        /// <summary>
+        /// Обработчик нажатия кнопки "Сохранить"
+        /// Выполняет валидацию, сохранение и закрытие формы
+        /// </summary>
         private void EditProduct_Click(object sender, EventArgs e)
         {
             if (!ValidateData()) return;
 
             SaveProductData();
 
+            // Сохраняем изображение, если оно было изменено
             if (_imageChanged)
             {
                 string imageFileName = SaveProductImage();
@@ -838,6 +995,10 @@ namespace ynivermag_bad
             }
         }
 
+        /// <summary>
+        /// Обработчик кнопки "Назад"/"Отмена"
+        /// Проверяет наличие несохраненных изменений
+        /// </summary>
         private void Back_Click(object sender, EventArgs e)
         {
             if (HasUnsavedChanges())
@@ -854,6 +1015,11 @@ namespace ynivermag_bad
             Close();
         }
 
+        /// <summary>
+        /// Проверяет наличие несохраненных изменений в форме
+        /// Сравнивает текущие значения полей с исходными данными товара
+        /// </summary>
+        /// <returns>true, если есть изменения</returns>
         private bool HasUnsavedChanges()
         {
             decimal currentPrice;
@@ -871,22 +1037,35 @@ namespace ynivermag_bad
                    _imageChanged;
         }
 
+        /// <summary>
+        /// Обработчик кнопки загрузки изображения
+        /// </summary>
         private void btnLoadImage_Click(object sender, EventArgs e)
         {
             LoadImageFromFile();
         }
 
+        /// <summary>
+        /// Обработчик кнопки удаления изображения
+        /// Возвращает изображение-заглушку
+        /// </summary>
         private void btnRemoveImage_Click(object sender, EventArgs e)
         {
             LoadDefaultImage();
             _imageChanged = true;
         }
 
+        /// <summary>
+        /// Обработчик клика по PictureBox - открывает диалог выбора изображения
+        /// </summary>
         private void pictureBoxProduct_Click(object sender, EventArgs e)
         {
             LoadImageFromFile();
         }
 
+        /// <summary>
+        /// Загружает изображение из файла с проверками размера и формата
+        /// </summary>
         private void LoadImageFromFile()
         {
             using (OpenFileDialog openFileDialog = new OpenFileDialog())
@@ -911,7 +1090,7 @@ namespace ynivermag_bad
                         return;
                     }
 
-                    // Проверка расширения
+                    // Проверка расширения файла
                     string extension = Path.GetExtension(filePath).ToLower();
                     string[] allowedExtensions = { ".jpg", ".jpeg", ".png", ".bmp", ".gif" };
 
@@ -929,12 +1108,14 @@ namespace ynivermag_bad
                     {
                         ReleaseImageResources();
 
+                        // Загрузка изображения с освобождением блокировки файла
                         using (FileStream stream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read))
                         {
                             _selectedImage = Image.FromStream(stream);
                             _selectedImage = new Bitmap(_selectedImage);
                         }
 
+                        // Проверка на слишком большое разрешение
                         if (_selectedImage.Width > 4000 || _selectedImage.Height > 4000)
                         {
                             var result = MessageBox.Show($"Разрешение изображения очень большое ({_selectedImage.Width}x{_selectedImage.Height}).\n" +
@@ -955,6 +1136,7 @@ namespace ynivermag_bad
                         SetPictureBoxImage(_selectedImage);
                         _imageChanged = true;
 
+                        // Добавляем подсказку с информацией о файле
                         toolTip1.SetToolTip(pictureBoxProduct,
                             $"Файл: {fileInfo.Name}\n" +
                             $"Размер: {FormatFileSize(fileInfo.Length)}\n" +
@@ -969,6 +1151,11 @@ namespace ynivermag_bad
             }
         }
 
+        /// <summary>
+        /// Форматирует размер файла в человекочитаемый вид
+        /// </summary>
+        /// <param name="bytes">Размер в байтах</param>
+        /// <returns>Отформатированная строка (Б, КБ, МБ)</returns>
         private string FormatFileSize(long bytes)
         {
             string[] sizes = { "Б", "КБ", "МБ" };
@@ -988,12 +1175,18 @@ namespace ynivermag_bad
 
         #region Drag & Drop
 
+        /// <summary>
+        /// Обработчик перетаскивания файла в PictureBox
+        /// </summary>
         private void pictureBoxProduct_DragEnter(object sender, DragEventArgs e)
         {
             e.Effect = e.Data.GetDataPresent(DataFormats.FileDrop) ?
                 DragDropEffects.Copy : DragDropEffects.None;
         }
 
+        /// <summary>
+        /// Обработчик завершения перетаскивания файла
+        /// </summary>
         private void pictureBoxProduct_DragDrop(object sender, DragEventArgs e)
         {
             string[] files = (string[])e.Data.GetData(DataFormats.FileDrop);
@@ -1001,6 +1194,7 @@ namespace ynivermag_bad
             {
                 string filePath = files[0];
 
+                // Проверка расширения
                 string extension = Path.GetExtension(filePath).ToLower();
                 string[] allowedExtensions = { ".jpg", ".jpeg", ".png", ".bmp", ".gif" };
 
@@ -1011,6 +1205,7 @@ namespace ynivermag_bad
                     return;
                 }
 
+                // Проверка размера
                 FileInfo fileInfo = new FileInfo(filePath);
                 if (fileInfo.Length > MAX_IMAGE_SIZE)
                 {
@@ -1046,6 +1241,10 @@ namespace ynivermag_bad
 
         #region Дополнительные обработчики
 
+        /// <summary>
+        /// Обработчик валидации поля названия
+        /// Делает первую букву заглавной
+        /// </summary>
         private void NameTB_Validating(object sender, CancelEventArgs e)
         {
             if (!string.IsNullOrWhiteSpace(NameTB.Text))
@@ -1059,6 +1258,9 @@ namespace ynivermag_bad
             }
         }
 
+        /// <summary>
+        /// Обработчик наведения мыши на PictureBox - показывает подсказку
+        /// </summary>
         private void pictureBoxProduct_MouseHover(object sender, EventArgs e)
         {
             toolTip1.SetToolTip(pictureBoxProduct,
@@ -1072,6 +1274,10 @@ namespace ynivermag_bad
 
         #region Жизненный цикл формы
 
+        /// <summary>
+        /// Переопределенный метод закрытия формы
+        /// Освобождает ресурсы изображений
+        /// </summary>
         protected override void OnFormClosing(FormClosingEventArgs e)
         {
             ReleaseImageResources();

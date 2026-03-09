@@ -11,18 +11,73 @@ using System.Windows.Forms;
 
 namespace ynivermag_bad
 {
+    /// <summary>
+    /// Форма для оформления заказов продавцом.
+    /// Предоставляет функционал для:
+    /// - Выбора клиента из списка (или поиска через отдельную форму)
+    /// - Просмотра доступных товаров с подсветкой остатков
+    /// - Добавления товаров в заказ
+    /// - Редактирования количества товаров
+    /// - Автоматического подсчета суммы
+    /// - Оформления заказа с проверкой остатков
+    /// - Генерации чека
+    /// </summary>
     public partial class RecordsSellerForm : Form
     {
+        // ============ ПОЛЯ КЛАССА ============
+
+        /// <summary>
+        /// ФИО текущего пользователя (продавца)
+        /// </summary>
         private string _fio;
+
+        /// <summary>
+        /// ID роли текущего пользователя
+        /// </summary>
         private int _roleID;
+
+        /// <summary>
+        /// Строка подключения к базе данных
+        /// </summary>
         private string _connection;
+
+        /// <summary>
+        /// Таблица со всеми доступными товарами
+        /// </summary>
         private DataTable _allProductsTable;
+
+        /// <summary>
+        /// Таблица с товарами в текущем заказе (не используется напрямую)
+        /// </summary>
         private DataTable _orderProductsTable;
+
+        /// <summary>
+        /// ID текущего пользователя в базе данных
+        /// </summary>
         private int _currentUserId;
+
+        /// <summary>
+        /// ID выбранного клиента (по умолчанию -1, не выбран)
+        /// </summary>
         private int _selectedClientId = -1;
+
+        /// <summary>
+        /// Общая сумма текущего заказа
+        /// </summary>
         private decimal _totalAmount = 0;
+
+        /// <summary>
+        /// Флаг для предотвращения рекурсивного обновления поля поиска
+        /// </summary>
         private bool _isUpdatingSearch = false;
 
+        // ============ КОНСТРУКТОР ============
+
+        /// <summary>
+        /// Конструктор формы оформления заказа
+        /// </summary>
+        /// <param name="FIO">ФИО продавца</param>
+        /// <param name="roleID">ID роли пользователя</param>
         public RecordsSellerForm(string FIO, int roleID)
         {
             InitializeComponent();
@@ -30,23 +85,36 @@ namespace ynivermag_bad
             _roleID = roleID;
             _connection = Connection.ConnectionString;
 
-            // Настройка форм
+            // Настройка формы
             this.Text = "Оформление заказа";
             FIOlabel.Text = $"Продавец: {_fio}";
 
             // Получаем ID текущего пользователя
             _currentUserId = GetCurrentUserId();
 
-            // Настройка DataGridView
+            // Настройка таблиц
             SetupAllProductsGrid();
             SetupOrderProductsGrid();
 
-            // Загрузка клиентов и продуктов
+            // Загрузка клиентов и товаров
             LoadClients();
             LoadAllProducts();
 
             // Подписка на события
+            SubscribeToEvents();
+        }
+
+        // ============ ПОДПИСКА НА СОБЫТИЯ ============
+
+        /// <summary>
+        /// Подписывается на все необходимые события формы
+        /// </summary>
+        private void SubscribeToEvents()
+        {
+            // События таблицы товаров
             dataGridViewAllProducts.CellDoubleClick += DataGridViewAllProducts_CellDoubleClick;
+
+            // События таблицы заказа
             dataGridViewOrderProducts.CellDoubleClick += DataGridViewOrderProducts_CellDoubleClick;
             dataGridViewOrderProducts.CellEndEdit += DataGridViewOrderProducts_CellEndEdit;
             dataGridViewOrderProducts.CellValidating += DataGridViewOrderProducts_CellValidating;
@@ -60,6 +128,12 @@ namespace ynivermag_bad
             toolTip1.SetToolTip(txtSearch, "Поиск по названию товара (буквы, цифры, пробел, дефис)");
         }
 
+        // ============ ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ ============
+
+        /// <summary>
+        /// Получает ID текущего пользователя из базы данных по ФИО
+        /// </summary>
+        /// <returns>ID пользователя или 1, если не найден</returns>
         private int GetCurrentUserId()
         {
             using (var connection = new MySqlConnection(_connection))
@@ -67,7 +141,7 @@ namespace ynivermag_bad
                 try
                 {
                     connection.Open();
-                    // Ищем пользователя по имени (FIO может быть в формате "Фамилия Имя")
+                    // Разбиваем ФИО на фамилию и имя
                     string[] nameParts = _fio.Split(' ');
                     string lastName = nameParts.Length > 0 ? nameParts[0] : "";
                     string firstName = nameParts.Length > 1 ? nameParts[1] : "";
@@ -91,6 +165,22 @@ namespace ynivermag_bad
             return 1; // Возвращаем 1 по умолчанию если не нашли
         }
 
+        /// <summary>
+        /// Очищает форму заказа для создания нового заказа
+        /// </summary>
+        private void ClearOrderForm()
+        {
+            cmbClient.SelectedIndex = -1;
+            dataGridViewOrderProducts.Rows.Clear();
+            _totalAmount = 0;
+            lblTotalAmount.Text = "Итого: 0 ₽";
+        }
+
+        // ============ НАСТРОЙКА ТАБЛИЦ ============
+
+        /// <summary>
+        /// Настраивает таблицу со списком всех товаров
+        /// </summary>
         private void SetupAllProductsGrid()
         {
             dataGridViewAllProducts.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
@@ -120,12 +210,12 @@ namespace ynivermag_bad
                     {
                         if (stock < 5)
                         {
-                            e.CellStyle.BackColor = Color.LightPink;
+                            e.CellStyle.BackColor = Color.LightPink;      // Критически мало
                             e.CellStyle.ForeColor = Color.DarkRed;
                         }
                         else if (stock < 10)
                         {
-                            e.CellStyle.BackColor = Color.LightYellow;
+                            e.CellStyle.BackColor = Color.LightYellow;    // Мало
                             e.CellStyle.ForeColor = Color.DarkOrange;
                         }
                     }
@@ -133,6 +223,9 @@ namespace ynivermag_bad
             };
         }
 
+        /// <summary>
+        /// Настраивает таблицу с товарами в текущем заказе
+        /// </summary>
         private void SetupOrderProductsGrid()
         {
             dataGridViewOrderProducts.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
@@ -152,17 +245,22 @@ namespace ynivermag_bad
 
             // Настройка колонок
             dataGridViewOrderProducts.Columns["ProductId"].Visible = false;
-            dataGridViewOrderProducts.Columns["AvailableStock"].Visible = false;
+            dataGridViewOrderProducts.Columns["AvailableStock"].Visible = false; // Скрываем, используем для проверок
             dataGridViewOrderProducts.Columns["Price"].DefaultCellStyle.Format = "C2";
             dataGridViewOrderProducts.Columns["Price"].DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleRight;
             dataGridViewOrderProducts.Columns["Quantity"].DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleCenter;
             dataGridViewOrderProducts.Columns["Total"].DefaultCellStyle.Format = "C2";
             dataGridViewOrderProducts.Columns["Total"].DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleRight;
 
-            // Делаем колонку Quantity редактируемой
+            // Делаем колонку Quantity редактируемой (пользователь может изменить количество)
             dataGridViewOrderProducts.Columns["Quantity"].ReadOnly = false;
         }
 
+        // ============ ЗАГРУЗКА ДАННЫХ ============
+
+        /// <summary>
+        /// Загружает список клиентов в комбобокс
+        /// </summary>
         private void LoadClients()
         {
             try
@@ -184,7 +282,7 @@ namespace ynivermag_bad
                     DataTable dt = new DataTable();
                     adapter.Fill(dt);
 
-                    // Создаем таблицу для отображения
+                    // Создаем таблицу для отображения в комбобоксе
                     DataTable displayDt = new DataTable();
                     displayDt.Columns.Add("client_id", typeof(int));
                     displayDt.Columns.Add("DisplayName", typeof(string)); // Для отображения в комбобоксе
@@ -213,7 +311,7 @@ namespace ynivermag_bad
                     // Устанавливаем ширину выпадающего списка
                     cmbClient.DropDownWidth = 350;
 
-                    // Делаем комбобокс недоступным для ввода текста
+                    // Делаем комбобокс недоступным для ввода текста (только выбор из списка)
                     cmbClient.DropDownStyle = ComboBoxStyle.DropDownList;
                 }
             }
@@ -223,6 +321,10 @@ namespace ynivermag_bad
             }
         }
 
+        /// <summary>
+        /// Форматирует имя клиента для отображения в комбобоксе
+        /// Формат: "Фамилия И. (телефон)"
+        /// </summary>
         private string FormatClientName(string lastName, string firstName, string phone)
         {
             // Формируем инициалы (только первая буква имени)
@@ -244,6 +346,9 @@ namespace ynivermag_bad
             return result;
         }
 
+        /// <summary>
+        /// Загружает список всех доступных товаров (с остатком > 0)
+        /// </summary>
         private void LoadAllProducts()
         {
             try
@@ -279,12 +384,114 @@ namespace ynivermag_bad
             }
         }
 
-        // Добавление товара в заказ
+        // ============ ФИЛЬТРАЦИЯ ВВОДА В ПОЛЕ ПОИСКА ============
+
+        /// <summary>
+        /// Фильтрация ввода в поле поиска - разрешаем только буквы, цифры, пробел и дефис
+        /// </summary>
+        private void TxtSearch_KeyPress(object sender, KeyPressEventArgs e)
+        {
+            // Разрешаем backspace (управляющие символы)
+            if (!char.IsControl(e.KeyChar))
+            {
+                // Проверяем, является ли символ буквой, цифрой, пробелом или дефисом
+                bool isValid = char.IsLetterOrDigit(e.KeyChar) ||
+                               e.KeyChar == ' ' ||
+                               e.KeyChar == '-';
+
+                if (!isValid)
+                {
+                    e.Handled = true; // Блокируем ввод
+
+                    // Показываем подсказку при попытке ввести спецсимвол
+                    if (sender is TextBox textBox)
+                    {
+                        toolTip1.Show("Разрешены только буквы, цифры, пробел и дефис",
+                            textBox, 0, -20, 1500);
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// Фильтрация ввода в поле поиска (дополнительная проверка при вставке из буфера)
+        /// </summary>
+        private void TxtSearch_TextChanged(object sender, EventArgs e)
+        {
+            if (_isUpdatingSearch) return;
+
+            _isUpdatingSearch = true;
+
+            try
+            {
+                // Фильтруем текст при вставке из буфера обмена
+                if (sender is TextBox textBox)
+                {
+                    int selectionStart = textBox.SelectionStart;
+                    string filteredText = FilterSearchText(textBox.Text);
+
+                    if (filteredText != textBox.Text)
+                    {
+                        textBox.Text = filteredText;
+                        textBox.SelectionStart = Math.Min(selectionStart, filteredText.Length);
+                    }
+                }
+
+                // Выполняем поиск с отфильтрованным текстом
+                PerformSearch();
+            }
+            finally
+            {
+                _isUpdatingSearch = false;
+            }
+        }
+
+        /// <summary>
+        /// Фильтр для текста поиска - оставляем только буквы, цифры, пробел и дефис
+        /// </summary>
+        private string FilterSearchText(string input)
+        {
+            if (string.IsNullOrEmpty(input)) return input;
+
+            return new string(input.Where(c =>
+                char.IsLetterOrDigit(c) ||  // Буквы и цифры
+                c == ' ' ||                  // Пробел
+                c == '-').ToArray());        // Дефис
+        }
+
+        /// <summary>
+        /// Выполняет поиск товаров по введенному тексту
+        /// </summary>
+        private void PerformSearch()
+        {
+            string searchText = txtSearch.Text.ToLower();
+            dataGridViewAllProducts.Rows.Clear();
+
+            foreach (DataRow row in _allProductsTable.Rows)
+            {
+                string productName = row["name"].ToString().ToLower();
+                if (string.IsNullOrEmpty(searchText) || productName.Contains(searchText))
+                {
+                    dataGridViewAllProducts.Rows.Add(
+                        row["product_id"],
+                        row["name"],
+                        Convert.ToDecimal(row["price"]),
+                        Convert.ToInt32(row["stock_quantity"])
+                    );
+                }
+            }
+        }
+
+        // ============ РАБОТА С ЗАКАЗОМ ============
+
+        /// <summary>
+        /// Добавление товара в заказ по двойному клику
+        /// </summary>
         private void DataGridViewAllProducts_CellDoubleClick(object sender, DataGridViewCellEventArgs e)
         {
             if (e.RowIndex < 0) return;
 
-            DataGridViewRow row = dataGridViewAllProducts.Rows[e.RowIndex];
+            var row = dataGridViewAllProducts.Rows[e.RowIndex];
             int productId = Convert.ToInt32(row.Cells["ProductId"].Value);
             string productName = row.Cells["ProductName"].Value.ToString();
             decimal price = Convert.ToDecimal(row.Cells["Price"].Value);
@@ -296,7 +503,7 @@ namespace ynivermag_bad
             {
                 if (Convert.ToInt32(orderRow.Cells["ProductId"].Value) == productId)
                 {
-                    // Увеличиваем количество
+                    // Увеличиваем количество на 1
                     int currentQuantity = Convert.ToInt32(orderRow.Cells["Quantity"].Value);
                     if (currentQuantity < availableStock)
                     {
@@ -312,15 +519,15 @@ namespace ynivermag_bad
                 }
             }
 
+            // Если товара нет в заказе, добавляем новую строку
             if (!exists)
             {
-                // Добавляем новый товар
                 int newRowIndex = dataGridViewOrderProducts.Rows.Add(
                     productId,
                     productName,
                     price,
-                    1,
-                    price,
+                    1,           // Начальное количество = 1
+                    price,        // Сумма = цена * 1
                     availableStock
                 );
                 UpdateOrderRowTotal(dataGridViewOrderProducts.Rows[newRowIndex]);
@@ -329,7 +536,9 @@ namespace ynivermag_bad
             UpdateTotalAmount();
         }
 
-        // Удаление товара из заказа
+        /// <summary>
+        /// Удаление товара из заказа по двойному клику
+        /// </summary>
         private void DataGridViewOrderProducts_CellDoubleClick(object sender, DataGridViewCellEventArgs e)
         {
             if (e.RowIndex < 0) return;
@@ -342,7 +551,9 @@ namespace ynivermag_bad
             }
         }
 
-        // Валидация количества
+        /// <summary>
+        /// Валидация количества при редактировании
+        /// </summary>
         private void DataGridViewOrderProducts_CellValidating(object sender, DataGridViewCellValidatingEventArgs e)
         {
             if (dataGridViewOrderProducts.Columns[e.ColumnIndex].Name == "Quantity")
@@ -363,7 +574,9 @@ namespace ynivermag_bad
             }
         }
 
-        // После редактирования количества
+        /// <summary>
+        /// После редактирования количества пересчитываем сумму
+        /// </summary>
         private void DataGridViewOrderProducts_CellEndEdit(object sender, DataGridViewCellEventArgs e)
         {
             if (dataGridViewOrderProducts.Columns[e.ColumnIndex].Name == "Quantity")
@@ -374,14 +587,15 @@ namespace ynivermag_bad
             }
         }
 
-        // Ограничение ввода только цифр для количества
+        /// <summary>
+        /// Ограничение ввода только цифр для поля количества
+        /// </summary>
         private void DataGridViewOrderProducts_EditingControlShowing(object sender, DataGridViewEditingControlShowingEventArgs e)
         {
             if (dataGridViewOrderProducts.CurrentCell.ColumnIndex ==
                 dataGridViewOrderProducts.Columns["Quantity"].Index)
             {
-                TextBox tb = e.Control as TextBox;
-                if (tb != null)
+                if (e.Control is TextBox tb)
                 {
                     tb.KeyPress += (s, args) =>
                     {
@@ -394,6 +608,9 @@ namespace ynivermag_bad
             }
         }
 
+        /// <summary>
+        /// Обновляет сумму для отдельной строки заказа
+        /// </summary>
         private void UpdateOrderRowTotal(DataGridViewRow row)
         {
             decimal price = Convert.ToDecimal(row.Cells["Price"].Value);
@@ -401,6 +618,9 @@ namespace ynivermag_bad
             row.Cells["Total"].Value = price * quantity;
         }
 
+        /// <summary>
+        /// Обновляет общую сумму заказа
+        /// </summary>
         private void UpdateTotalAmount()
         {
             _totalAmount = 0;
@@ -411,7 +631,11 @@ namespace ynivermag_bad
             lblTotalAmount.Text = $"Итого: {_totalAmount:C2}";
         }
 
-        // Оформление заказа
+        // ============ ОФОРМЛЕНИЕ ЗАКАЗА ============
+
+        /// <summary>
+        /// Обработчик кнопки оформления заказа
+        /// </summary>
         private void btnCreateOrder_Click(object sender, EventArgs e)
         {
             // Проверка выбора клиента
@@ -442,71 +666,64 @@ namespace ynivermag_bad
             using (var connection = new MySqlConnection(_connection))
             {
                 connection.Open();
-
-                try
+                using (var transaction = connection.BeginTransaction()) // Используем транзакцию для целостности данных
                 {
-                    // 1. Сначала проверяем наличие всех товаров
-                    Dictionary<int, int> requestedQuantities = new Dictionary<int, int>();
-                    Dictionary<int, string> productNames = new Dictionary<int, string>();
-
-                    foreach (DataGridViewRow row in dataGridViewOrderProducts.Rows)
+                    try
                     {
-                        int productId = Convert.ToInt32(row.Cells["ProductId"].Value);
-                        int requestedQuantity = Convert.ToInt32(row.Cells["Quantity"].Value);
-                        string productName = row.Cells["ProductName"].Value.ToString();
+                        // 1. Сначала проверяем наличие всех товаров
+                        Dictionary<int, int> requestedQuantities = new Dictionary<int, int>();
+                        Dictionary<int, string> productNames = new Dictionary<int, string>();
 
-                        requestedQuantities[productId] = requestedQuantity;
-                        productNames[productId] = productName;
-                    }
-
-                    // Проверяем наличие по одному
-                    foreach (var item in requestedQuantities)
-                    {
-                        int productId = item.Key;
-                        int requestedQuantity = item.Value;
-
-                        string checkQuery = "SELECT stock_quantity FROM product WHERE product_id = @ProductId";
-                        MySqlCommand checkCmd = new MySqlCommand(checkQuery, connection);
-                        checkCmd.Parameters.AddWithValue("@ProductId", productId);
-
-                        int availableStock = Convert.ToInt32(checkCmd.ExecuteScalar());
-                        if (availableStock < requestedQuantity)
+                        foreach (DataGridViewRow row in dataGridViewOrderProducts.Rows)
                         {
-                            MessageBox.Show($"Недостаточно товара '{productNames[productId]}' на складе.\n" +
-                                          $"Запрошено: {requestedQuantity}, Доступно: {availableStock}",
-                                          "Ошибка", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                            return;
+                            int productId = Convert.ToInt32(row.Cells["ProductId"].Value);
+                            int requestedQuantity = Convert.ToInt32(row.Cells["Quantity"].Value);
+                            string productName = row.Cells["ProductName"].Value.ToString();
+
+                            requestedQuantities[productId] = requestedQuantity;
+                            productNames[productId] = productName;
                         }
-                    }
 
-                    // 2. Создаем заказ
-                    string orderQuery = @"INSERT INTO `order` (client_id, user_id, order_date, total_amount, status) 
-                             VALUES (@ClientId, @UserId, NOW(), @TotalAmount, 'обработка')";
-                    MySqlCommand orderCmd = new MySqlCommand(orderQuery, connection);
-                    orderCmd.Parameters.AddWithValue("@ClientId", clientId);
-                    orderCmd.Parameters.AddWithValue("@UserId", _currentUserId);
-                    orderCmd.Parameters.AddWithValue("@TotalAmount", _totalAmount);
-                    orderCmd.ExecuteNonQuery();
+                        // Проверяем наличие по одному
+                        foreach (var item in requestedQuantities)
+                        {
+                            int productId = item.Key;
+                            int requestedQuantity = item.Value;
 
-                    int orderId = (int)orderCmd.LastInsertedId;
+                            string checkQuery = "SELECT stock_quantity FROM product WHERE product_id = @ProductId FOR UPDATE";
+                            MySqlCommand checkCmd = new MySqlCommand(checkQuery, connection, transaction);
+                            checkCmd.Parameters.AddWithValue("@ProductId", productId);
 
-                    // 3. Добавляем товары в order_product и обновляем остатки
-                    bool allSuccessful = true;
-                    List<string> errors = new List<string>();
+                            int availableStock = Convert.ToInt32(checkCmd.ExecuteScalar());
+                            if (availableStock < requestedQuantity)
+                            {
+                                throw new Exception($"Недостаточно товара '{productNames[productId]}' на складе.\n" +
+                                                  $"Запрошено: {requestedQuantity}, Доступно: {availableStock}");
+                            }
+                        }
 
-                    foreach (DataGridViewRow row in dataGridViewOrderProducts.Rows)
-                    {
-                        try
+                        // 2. Создаем заказ
+                        string orderQuery = @"INSERT INTO `order` (client_id, user_id, order_date, total_amount, status) 
+                                     VALUES (@ClientId, @UserId, NOW(), @TotalAmount, 'обработка')";
+                        MySqlCommand orderCmd = new MySqlCommand(orderQuery, connection, transaction);
+                        orderCmd.Parameters.AddWithValue("@ClientId", clientId);
+                        orderCmd.Parameters.AddWithValue("@UserId", _currentUserId);
+                        orderCmd.Parameters.AddWithValue("@TotalAmount", _totalAmount);
+                        orderCmd.ExecuteNonQuery();
+
+                        int orderId = (int)orderCmd.LastInsertedId;
+
+                        // 3. Добавляем товары в order_product и обновляем остатки
+                        foreach (DataGridViewRow row in dataGridViewOrderProducts.Rows)
                         {
                             int productId = Convert.ToInt32(row.Cells["ProductId"].Value);
                             int quantity = Convert.ToInt32(row.Cells["Quantity"].Value);
                             decimal price = Convert.ToDecimal(row.Cells["Price"].Value);
-                            string productName = row.Cells["ProductName"].Value.ToString();
 
                             // Добавляем в order_product
                             string itemQuery = @"INSERT INTO order_product (order_id, product_id, quantity, unit_price) 
-                                   VALUES (@OrderId, @ProductId, @Quantity, @Price)";
-                            MySqlCommand itemCmd = new MySqlCommand(itemQuery, connection);
+                                       VALUES (@OrderId, @ProductId, @Quantity, @Price)";
+                            MySqlCommand itemCmd = new MySqlCommand(itemQuery, connection, transaction);
                             itemCmd.Parameters.AddWithValue("@OrderId", orderId);
                             itemCmd.Parameters.AddWithValue("@ProductId", productId);
                             itemCmd.Parameters.AddWithValue("@Quantity", quantity);
@@ -515,20 +732,15 @@ namespace ynivermag_bad
 
                             // Обновляем остаток на складе
                             string updateStockQuery = "UPDATE product SET stock_quantity = stock_quantity - @Quantity WHERE product_id = @ProductId";
-                            MySqlCommand updateStockCmd = new MySqlCommand(updateStockQuery, connection);
+                            MySqlCommand updateStockCmd = new MySqlCommand(updateStockQuery, connection, transaction);
                             updateStockCmd.Parameters.AddWithValue("@Quantity", quantity);
                             updateStockCmd.Parameters.AddWithValue("@ProductId", productId);
                             updateStockCmd.ExecuteNonQuery();
                         }
-                        catch (Exception ex)
-                        {
-                            allSuccessful = false;
-                            errors.Add($"Ошибка при обработке товара '{row.Cells["ProductName"].Value}': {ex.Message}");
-                        }
-                    }
 
-                    if (allSuccessful)
-                    {
+                        // Подтверждаем транзакцию
+                        transaction.Commit();
+
                         MessageBox.Show($"Заказ №{orderId} успешно оформлен!", "Успех",
                             MessageBoxButtons.OK, MessageBoxIcon.Information);
 
@@ -536,24 +748,7 @@ namespace ynivermag_bad
                         if (MessageBox.Show("Создать чек?", "Печать чека",
                             MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes)
                         {
-                            // Собираем товары
-                            List<OrderItem> items = new List<OrderItem>();
-                            foreach (DataGridViewRow row in dataGridViewOrderProducts.Rows)
-                            {
-                                items.Add(new OrderItem
-                                {
-                                    ProductId = Convert.ToInt32(row.Cells["ProductId"].Value),
-                                    ProductName = row.Cells["ProductName"].Value.ToString(),
-                                    Price = Convert.ToDecimal(row.Cells["Price"].Value),
-                                    Quantity = Convert.ToInt32(row.Cells["Quantity"].Value)
-                                });
-                            }
-
-                            string clientName = cmbClient.Text;
-
-                            // Создаем чек в Word
-                            ReceiptGenerator generator = new ReceiptGenerator();
-                            generator.GenerateReceipt(orderId, clientName, _fio, items, _totalAmount, DateTime.Now);
+                            GenerateReceipt(orderId);
                         }
 
                         // Очищаем форму для нового заказа
@@ -562,34 +757,46 @@ namespace ynivermag_bad
                         // Обновляем список товаров
                         LoadAllProducts();
                     }
-                    else
+                    catch (Exception ex)
                     {
-                        // Если были ошибки, показываем их все
-                        string errorMessage = "При оформлении заказа произошли следующие ошибки:\n\n" +
-                                             string.Join("\n", errors) +
-                                             "\n\nЗаказ был частично оформлен. Проверьте данные вручную.";
-
-                        MessageBox.Show(errorMessage, "Ошибка",
+                        // Откатываем транзакцию в случае ошибки
+                        transaction.Rollback();
+                        MessageBox.Show($"Ошибка при оформлении заказа: {ex.Message}", "Ошибка",
                             MessageBoxButtons.OK, MessageBoxIcon.Error);
                     }
-                }
-                catch (Exception ex)
-                {
-                    MessageBox.Show($"Ошибка при оформлении заказа: {ex.Message}", "Ошибка",
-                        MessageBoxButtons.OK, MessageBoxIcon.Error);
                 }
             }
         }
 
-        private void ClearOrderForm()
+        /// <summary>
+        /// Генерирует чек для оформленного заказа
+        /// </summary>
+        /// <param name="orderId">Номер заказа</param>
+        private void GenerateReceipt(int orderId)
         {
-            cmbClient.SelectedIndex = -1;
-            dataGridViewOrderProducts.Rows.Clear();
-            _totalAmount = 0;
-            lblTotalAmount.Text = "Итого: 0 ₽";
+            List<OrderItem> items = new List<OrderItem>();
+            foreach (DataGridViewRow row in dataGridViewOrderProducts.Rows)
+            {
+                items.Add(new OrderItem
+                {
+                    ProductId = Convert.ToInt32(row.Cells["ProductId"].Value),
+                    ProductName = row.Cells["ProductName"].Value.ToString(),
+                    Price = Convert.ToDecimal(row.Cells["Price"].Value),
+                    Quantity = Convert.ToInt32(row.Cells["Quantity"].Value)
+                });
+            }
+
+            string clientName = cmbClient.Text;
+
+            ReceiptGenerator generator = new ReceiptGenerator();
+            generator.GenerateReceipt(orderId, clientName, _fio, items, _totalAmount, DateTime.Now);
         }
 
-        // Очистка заказа
+        // ============ ОБРАБОТЧИКИ КНОПОК ============
+
+        /// <summary>
+        /// Очистка текущего заказа
+        /// </summary>
         private void btnClearOrder_Click(object sender, EventArgs e)
         {
             if (dataGridViewOrderProducts.Rows.Count > 0)
@@ -602,90 +809,9 @@ namespace ynivermag_bad
             }
         }
 
-        // Фильтрация ввода в поле поиска - разрешаем только буквы, цифры, пробел и дефис
-        private void TxtSearch_KeyPress(object sender, KeyPressEventArgs e)
-        {
-            // Разрешаем: буквы (русские и английские), цифры, пробел, дефис, backspace
-            if (!char.IsControl(e.KeyChar))
-            {
-                // Проверяем, является ли символ буквой, цифрой, пробелом или дефисом
-                bool isValid = char.IsLetterOrDigit(e.KeyChar) ||
-                               e.KeyChar == ' ' ||
-                               e.KeyChar == '-';
-
-                if (!isValid)
-                {
-                    e.Handled = true;
-
-                    // Показываем подсказку при попытке ввести спецсимвол
-                    TextBox textBox = sender as TextBox;
-                    if (textBox != null)
-                    {
-                        toolTip1.Show("Разрешены только буквы, цифры, пробел и дефис",
-                            textBox, 0, -20, 1500);
-                    }
-                }
-            }
-        }
-
-        // Фильтрация ввода в поле поиска (дополнительная проверка при вставке)
-        private void TxtSearch_TextChanged(object sender, EventArgs e)
-        {
-            if (_isUpdatingSearch) return;
-
-            _isUpdatingSearch = true;
-
-            try
-            {
-                TextBox textBox = sender as TextBox;
-                if (textBox != null)
-                {
-                    int selectionStart = textBox.SelectionStart;
-                    string filteredText = FilterSearchText(textBox.Text);
-
-                    if (filteredText != textBox.Text)
-                    {
-                        textBox.Text = filteredText;
-                        textBox.SelectionStart = Math.Min(selectionStart, filteredText.Length);
-                    }
-                }
-
-                // Выполняем поиск с отфильтрованным текстом
-                string searchText = txtSearch.Text.ToLower();
-                dataGridViewAllProducts.Rows.Clear();
-
-                foreach (DataRow row in _allProductsTable.Rows)
-                {
-                    string productName = row["name"].ToString().ToLower();
-                    if (string.IsNullOrEmpty(searchText) || productName.Contains(searchText))
-                    {
-                        dataGridViewAllProducts.Rows.Add(
-                            row["product_id"],
-                            row["name"],
-                            Convert.ToDecimal(row["price"]),
-                            Convert.ToInt32(row["stock_quantity"])
-                        );
-                    }
-                }
-            }
-            finally
-            {
-                _isUpdatingSearch = false;
-            }
-        }
-
-        // Фильтр для текста поиска - оставляем только буквы, цифры, пробел и дефис
-        private string FilterSearchText(string input)
-        {
-            if (string.IsNullOrEmpty(input)) return input;
-
-            return new string(input.Where(c =>
-                char.IsLetterOrDigit(c) ||  // Буквы и цифры
-                c == ' ' ||                  // Пробел
-                c == '-').ToArray());        // Дефис
-        }
-
-        // Кнопка добавления нового клиента
+        /// <summary>
+        /// Добавление нового клиента
+        /// </summary>
         private void btnAddClient_Click(object sender, EventArgs e)
         {
             AddClientForm addClientForm = new AddClientForm();
@@ -697,23 +823,31 @@ namespace ynivermag_bad
             }
         }
 
-        // Кнопка возврата в меню
-        private void InMenu_Click(object sender, EventArgs e)
+        /// <summary>
+        /// Поиск клиента через отдельную форму
+        /// </summary>
+        private void button7_Click(object sender, EventArgs e)
         {
-            if (_roleID == 2)
+            using (SearchClient searchForm = new SearchClient())
             {
-                MenuSellerForm menu = new MenuSellerForm(_fio);
-                menu.Show();
-                this.Hide();
-            }
-            else
-            {
-                // Для других ролей, если нужно
-                this.Close();
+                if (searchForm.ShowDialog() == DialogResult.OK)
+                {
+                    // Ищем клиента в списке комбобокса по ID
+                    foreach (DataRowView item in cmbClient.Items)
+                    {
+                        if (Convert.ToInt32(item["client_id"]) == searchForm.SelectedClientId)
+                        {
+                            cmbClient.SelectedItem = item;
+                            break;
+                        }
+                    }
+                }
             }
         }
 
-        // Добавление товара через кнопку (альтернатива двойному клику)
+        /// <summary>
+        /// Добавление товара через кнопку (альтернатива двойному клику)
+        /// </summary>
         private void btnAddProduct_Click(object sender, EventArgs e)
         {
             if (dataGridViewAllProducts.SelectedRows.Count > 0)
@@ -762,7 +896,9 @@ namespace ynivermag_bad
             }
         }
 
-        // Удаление товара через кнопку
+        /// <summary>
+        /// Удаление выбранного товара из заказа
+        /// </summary>
         private void btnRemoveProduct_Click(object sender, EventArgs e)
         {
             if (dataGridViewOrderProducts.SelectedRows.Count > 0)
@@ -782,22 +918,20 @@ namespace ynivermag_bad
             }
         }
 
-        private void button7_Click(object sender, EventArgs e)
+        /// <summary>
+        /// Возврат в главное меню
+        /// </summary>
+        private void InMenu_Click(object sender, EventArgs e)
         {
-            using (SearchClient searchForm = new SearchClient())
+            if (_roleID == 2)
             {
-                if (searchForm.ShowDialog() == DialogResult.OK)
-                {
-                    // Ищем клиента в списке комбобокса по ID
-                    foreach (DataRowView item in cmbClient.Items)
-                    {
-                        if (Convert.ToInt32(item["client_id"]) == searchForm.SelectedClientId)
-                        {
-                            cmbClient.SelectedItem = item;
-                            break;
-                        }
-                    }
-                }
+                MenuSellerForm menu = new MenuSellerForm(_fio);
+                menu.Show();
+                this.Hide();
+            }
+            else
+            {
+                this.Close();
             }
         }
     }

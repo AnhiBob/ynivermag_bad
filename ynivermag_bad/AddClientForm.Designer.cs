@@ -137,6 +137,7 @@ namespace ynivermag_bad
             this.FirstNameTextBox.Size = new System.Drawing.Size(351, 31);
             this.FirstNameTextBox.TabIndex = 8;
             this.FirstNameTextBox.TextChanged += new System.EventHandler(this.FirstNameTextBox_TextChanged);
+            this.FirstNameTextBox.Validating += new System.ComponentModel.CancelEventHandler(this.FirstNameTextBox_Validating);
             // 
             // LastNameTextBox
             // 
@@ -145,7 +146,8 @@ namespace ynivermag_bad
             this.LastNameTextBox.Name = "LastNameTextBox";
             this.LastNameTextBox.Size = new System.Drawing.Size(351, 31);
             this.LastNameTextBox.TabIndex = 9;
-            this.LastNameTextBox.Validated += new System.EventHandler(this.LastNameTextBox_TextChanged);
+            this.LastNameTextBox.TextChanged += new System.EventHandler(this.LastNameTextBox_TextChanged);
+            this.LastNameTextBox.Validating += new System.ComponentModel.CancelEventHandler(this.LastNameTextBox_Validating);
             // 
             // PhoneMaskedTextBox
             // 

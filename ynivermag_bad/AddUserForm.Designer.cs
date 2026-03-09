@@ -145,6 +145,8 @@ namespace ynivermag_bad
             this.FirstName.Name = "FirstName";
             this.FirstName.Size = new System.Drawing.Size(312, 31);
             this.FirstName.TabIndex = 9;
+            this.FirstName.TextChanged += new System.EventHandler(this.FirstName_TextChanged);
+            this.FirstName.Validating += new System.ComponentModel.CancelEventHandler(this.FirstName_Validating);
             // 
             // Login
             // 
@@ -153,6 +155,7 @@ namespace ynivermag_bad
             this.Login.Name = "Login";
             this.Login.Size = new System.Drawing.Size(312, 31);
             this.Login.TabIndex = 10;
+            this.Login.TextChanged += new System.EventHandler(this.Login_TextChanged);
             // 
             // Password
             // 
@@ -161,6 +164,7 @@ namespace ynivermag_bad
             this.Password.Name = "Password";
             this.Password.Size = new System.Drawing.Size(312, 31);
             this.Password.TabIndex = 11;
+            this.Password.TextChanged += new System.EventHandler(this.Password_TextChanged);
             // 
             // Email
             // 
@@ -169,6 +173,7 @@ namespace ynivermag_bad
             this.Email.Name = "Email";
             this.Email.Size = new System.Drawing.Size(312, 31);
             this.Email.TabIndex = 12;
+            this.Email.TextChanged += new System.EventHandler(this.Email_TextChanged);
             // 
             // LastName
             // 
@@ -177,9 +182,12 @@ namespace ynivermag_bad
             this.LastName.Name = "LastName";
             this.LastName.Size = new System.Drawing.Size(312, 31);
             this.LastName.TabIndex = 14;
+            this.LastName.TextChanged += new System.EventHandler(this.LastName_TextChanged);
+            this.LastName.Validating += new System.ComponentModel.CancelEventHandler(this.LastName_Validating);
             // 
             // RoleCb
             // 
+            this.RoleCb.DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList;
             this.RoleCb.FormattingEnabled = true;
             this.RoleCb.Location = new System.Drawing.Point(125, 255);
             this.RoleCb.Name = "RoleCb";
